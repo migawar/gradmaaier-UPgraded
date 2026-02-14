@@ -10,8 +10,28 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// --- NIEUW: GELD UI ---
+// --- ECONOMIE & STATS ---
 let geld = 0.00;
+let grasWaarde = 0.01;
+let huidigMowerRadius = 1.0;
+let huidigeSnelheid = 0.12;
+
+let prijsRadius = 5.00;
+let prijsSnelheid = 5.00;
+let prijsWaarde = 10.00;
+
+// UI Container voor knoppen
+const menu = document.createElement('div');
+menu.style.position = 'absolute';
+menu.style.left = '10px';
+menu.style.top = '50%';
+menu.style.transform = 'translateY(-50%)';
+menu.style.display = 'flex';
+menu.style.flexDirection = 'column';
+menu.style.gap = '10px';
+document.body.appendChild(menu);
+
+// Geld Display
 const geldDisplay = document.createElement('div');
 geldDisplay.style.position = 'absolute';
 geldDisplay.style.top = '10px';
@@ -24,22 +44,73 @@ geldDisplay.style.padding = '10px';
 geldDisplay.style.borderRadius = '5px';
 geldDisplay.innerText = '$ ' + geld.toFixed(2);
 document.body.appendChild(geldDisplay);
-// ----------------------
 
-// 3. DE MAAIER (Rode kubus: 0.75 x 0.75 x 1)
-const mowerGeo = new THREE.BoxGeometry(0.75, 0.75, 1);
-const mowerMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-const mower = new THREE.Mesh(mowerGeo, mowerMat);
+// Functie om knoppen te maken
+function maakKnop(tekst, actie) {
+    const btn = document.createElement('button');
+    btn.style.backgroundColor = '#2ecc71';
+    btn.style.color = 'white';
+    btn.style.border = 'none';
+    btn.style.padding = '15px';
+    btn.style.cursor = 'pointer';
+    btn.style.borderRadius = '5px';
+    btn.style.fontWeight = 'bold';
+    btn.innerText = tekst;
+    btn.onclick = actie;
+    menu.appendChild(btn);
+    return btn;
+}
+
+const btnRadius = maakKnop('', () => {
+    if (geld >= prijsRadius) {
+        geld -= prijsRadius;
+        huidigMowerRadius += 0.1;
+        prijsRadius *= 1.5;
+        updateUI();
+    }
+});
+
+const btnSpeed = maakKnop('', () => {
+    if (geld >= prijsSnelheid) {
+        geld -= prijsSnelheid;
+        huidigeSnelheid += 0.02; // Komt overeen met ongeveer +1 km/u in verhouding
+        prijsSnelheid *= 1.5;
+        updateUI();
+    }
+});
+
+const btnWaarde = maakKnop('', () => {
+    if (geld >= prijsWaarde) {
+        geld -= prijsWaarde;
+        grasWaarde += 0.01;
+        prijsWaarde *= 1.5;
+        updateUI();
+    }
+});
+
+function updateUI() {
+    geldDisplay.innerText = '$ ' + geld.toFixed(2);
+    btnRadius.innerText = `Groter Bereik ($${prijsRadius.toFixed(2)})\nStraal: ${huidigMowerRadius.toFixed(1)}m`;
+    btnSpeed.innerText = `Sneller ($${prijsSnelheid.toFixed(2)})\nSnelheid: +1 km/u`;
+    btnWaarde.innerText = `Meer Waarde ($${prijsWaarde.toFixed(2)})\nPer bol: $${grasWaarde.toFixed(2)}`;
+}
+updateUI();
+
+// 3. DE MAAIER
+const mower = new THREE.Mesh(
+    new THREE.BoxGeometry(0.75, 0.75, 1),
+    new THREE.MeshStandardMaterial({ color: 0xff0000 })
+);
 mower.position.y = 0.375;
 scene.add(mower);
 
-// 4. HET GRASVELD (15x15 meter)
+// 4. HET GRASVELD
 const grassArray = [];
-const grassGeo = new THREE.SphereGeometry(0.125, 6, 6);
+const grassGeo = new THREE.SphereGeometry(0.125, 4, 4); // Iets minder detail voor performance
 const grassMat = new THREE.MeshStandardMaterial({ color: 0x228b22 });
 
-const step = 0.35; // 0.25m bol + 0.1m marge
-const fieldSize = 7.5; 
+const step = 0.35; 
+const fieldSize = 10; // Iets groter veld zoals gevraagd (15-20m)
 
 for (let x = -fieldSize; x <= fieldSize; x += step) {
     for (let z = -fieldSize; z <= fieldSize; z += step) {
@@ -62,55 +133,43 @@ const keys = {};
 window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
 window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
-// 7. MAAI, GROEI & GELD LOGICA
-const mowerRadius = 1.0; 
+// 7. LOGICA
 const grassRadius = 0.125;
-const regrowDelay = 500; 
+const regrowDelay = 3000; 
 
 function processGrass() {
     const currentTime = Date.now();
-
     for (let i = 0; i < grassArray.length; i++) {
         const grass = grassArray[i];
-
         if (grass.visible) {
             const dx = mower.position.x - grass.position.x;
             const dz = mower.position.z - grass.position.z;
             const distance = Math.sqrt(dx * dx + dz * dz);
 
-            if (distance + grassRadius <= mowerRadius) {
+            if (distance + grassRadius <= huidigMowerRadius) {
                 grass.visible = false;
                 grass.userData.mownTime = currentTime;
-                
-                // GELD VERDIENEN
-                geld += 0.01;
-                geldDisplay.innerText = '$ ' + geld.toFixed(2);
+                geld += grasWaarde;
+                updateUI();
             }
-        } else {
-            if (currentTime - grass.userData.mownTime > regrowDelay) {
-                grass.visible = true;
-                grass.userData.mownTime = null;
-            }
+        } else if (currentTime - grass.userData.mownTime > regrowDelay) {
+            grass.visible = true;
         }
     }
 }
 
-// 8. ANIMATIE LOOP
-const speed = 0.12;
-
+// 8. ANIMATIE
 function animate() {
     requestAnimationFrame(animate);
 
-    if (keys['z']) mower.position.z -= speed;
-    if (keys['s']) mower.position.z += speed;
-    if (keys['q']) mower.position.x -= speed;
-    if (keys['d']) mower.position.x += speed;
+    if (keys['z']) mower.position.z -= huidigeSnelheid;
+    if (keys['s']) mower.position.z += huidigeSnelheid;
+    if (keys['q']) mower.position.x -= huidigeSnelheid;
+    if (keys['d']) mower.position.x += huidigeSnelheid;
 
     processGrass();
 
-    camera.position.x = mower.position.x;
-    camera.position.y = mower.position.y + 4;
-    camera.position.z = mower.position.z + 6;
+    camera.position.set(mower.position.x, mower.position.y + 5, mower.position.z + 7);
     camera.lookAt(mower.position);
 
     renderer.render(scene, camera);
