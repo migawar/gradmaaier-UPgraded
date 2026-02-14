@@ -9,61 +9,57 @@ const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerH
 // 2. Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-document.getElementById('canvas-container').appendChild(renderer.domElement);
+const container = document.getElementById('canvas-container');
+if (container) {
+    container.appendChild(renderer.domElement);
+} else {
+    document.body.appendChild(renderer.domElement);
+}
 
-// 3. De Rode Grasmaaier (Kubus)
-const geometry = new THREE.BoxGeometry(0.75, 0.75, 1);
-const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-const mower = new THREE.Mesh(geometry, material);
+// 3. De Rode Grasmaaier (0.75 x 0.75 x 1)
+const mowerGeo = new THREE.BoxGeometry(0.75, 0.75, 1);
+const mowerMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+const mower = new THREE.Mesh(mowerGeo, mowerMat);
 mower.position.y = 0.375; 
 scene.add(mower);
 
-// --- GEOPTIMALISEERD GRAS (InstancedMesh) ---
-const grassSize = 0.25; 
-const spacing = 0.1; // Jouw gevraagde tussenruimte
-const range = 10; // Hoe ver het grasveld uitstrekt vanaf het midden (totaal 20m x 20m)
-
-// Aantal bollen berekenen
-const countPerSide = Math.floor((range * 2) / (grassSize + spacing));
-const totalGrassCount = countPerSide * countPerSide;
-
-const grassGeo = new THREE.SphereGeometry(grassSize / 2, 6, 6); // Low-poly voor snelheid
+// 4. HET GRAS (Bollen van 0.25m, met 0.1m tussenruimte)
+const grassGroup = new THREE.Group();
+const grassGeo = new THREE.SphereGeometry(0.125, 6, 6); // Straal is 0.125 (diameter 0.25)
 const grassMat = new THREE.MeshStandardMaterial({ color: 0x228b22 });
-const instancedGrass = new THREE.THREE.InstancedMesh(grassGeo, grassMat, totalGrassCount);
 
-let i = 0;
-const dummy = new THREE.Object3D();
+const step = 0.35; // 0.25m breedte + 0.1m tussenruimte
+const areaSize = 5; // Vult van -5 tot +5 meter
 
-for (let x = -range; x < range; x += grassSize + spacing) {
-    for (let z = -range; z < range; z += grassSize + spacing) {
-        dummy.position.set(x, grassSize / 2, z);
-        dummy.updateMatrix();
-        instancedGrass.setMatrixAt(i++, dummy.matrix);
+for (let x = -areaSize; x <= areaSize; x += step) {
+    for (let z = -areaSize; z <= areaSize; z += step) {
+        const grassPos = new THREE.Mesh(grassGeo, grassMat);
+        grassPos.position.set(x, 0.125, z);
+        grassGroup.add(grassPos);
     }
 }
-scene.add(instancedGrass);
-// --------------------------------------------
+scene.add(grassGroup);
 
-// 4. Licht
-const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+// 5. Licht
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
 scene.add(ambientLight);
 
-const pointLight = new THREE.PointLight(0xffffff, 20);
-pointLight.position.set(5, 10, 5);
+const pointLight = new THREE.PointLight(0xffffff, 15);
+pointLight.position.set(5, 5, 5);
 scene.add(pointLight);
 
-// 5. GridHelper (voor diepte-indicatie buiten het grasveld)
+// 6. Grid (voor de horizon)
 const gridHelper = new THREE.GridHelper(100, 100, 0x00ff00, 0x444444);
 scene.add(gridHelper);
 
-// 6. Besturing Logica
+// 7. Besturing
 const keys = {};
 window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
 window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
 const speed = 0.1;
 
-// 7. Animatie Loop
+// 8. Animatie Loop
 function animate() {
     requestAnimationFrame(animate);
 
