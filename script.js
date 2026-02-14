@@ -65,7 +65,7 @@ window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 // 7. MAAI, GROEI & GELD LOGICA
 const mowerRadius = 1.0; 
 const grassRadius = 0.125;
-const regrowDelay = 3000; 
+const regrowDelay = 500; 
 
 function processGrass() {
     const currentTime = Date.now();
