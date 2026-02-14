@@ -1,65 +1,64 @@
 import * as THREE from 'three';
 
-// 1. Scene & Camera
+// 1. SCÈNE
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 3, 5); // Camera positie voor goed overzicht
-camera.lookAt(0, 0, 0);
+scene.background = new THREE.Color(0x222222);
 
-// 2. Renderer
+// 2. CAMERA
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+// 3. RENDERER
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-document.getElementById('canvas-container').appendChild(renderer.domElement);
+document.body.appendChild(renderer.domElement);
 
-// 3. De Rode Grasmaaier (Kubus)
-// Afmetingen: Breedte: 0.75, Hoogte: 0.75, Lengte: 1
+// 4. DE GRASMAAIER (Rode Kubus)
 const geometry = new THREE.BoxGeometry(0.75, 0.75, 1);
 const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
 const mower = new THREE.Mesh(geometry, material);
 
-// CRUCIAL: Zet de onderkant OP het grid (y = hoogte / 2)
+// Positie op het grid
 mower.position.y = 0.375; 
-
 scene.add(mower);
 
-// 4. Het Grid (de "ondergrond")
-const gridHelper = new THREE.GridHelper(10, 10, 0x888888, 0x444444);
-scene.add(gridHelper);
+// --- CAMERA FOLLOW LOGICA ---
+// We voegen de camera toe aan de mower. 
+// De camera positie is nu RELATIEF ten opzichte van de maaier.
+mower.add(camera);
+camera.position.set(0, 3, 5); // 3 meter omhoog, 5 meter naar achteren t.o.v. de maaier
+camera.lookAt(0, 0, -2); // Kijk een beetje voor de maaier uit
+// -----------------------------
 
-// 5. Licht
+// 5. GROND (Grid)
+const grid = new THREE.GridHelper(100, 100, 0x00ff00, 0x444444);
+scene.add(grid);
+
+// 6. LICHT
 const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(5, 5, 5);
+light.position.set(5, 10, 7);
 scene.add(light);
-scene.add(new THREE.AmbientLight(0x404040, 1.5));
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-// 6. Besturing (ZQSD)
-const keys = { z: false, q: false, s: false, d: false };
-const speed = 0.05;
+// 7. BESTURING (ZQSD)
+const keys = {};
+window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
-window.addEventListener('keydown', (e) => {
-    const key = e.key.toLowerCase();
-    if (key in keys) keys[key] = true;
-});
+// 8. ANIMATIE
+const speed = 0.1;
 
-window.addEventListener('keyup', (e) => {
-    const key = e.key.toLowerCase();
-    if (key in keys) keys[key] = false;
-});
-
-// 7. Animatie & Beweging
 function animate() {
     requestAnimationFrame(animate);
 
-    // Beweging over de vloer (X en Z as)
-    if (keys.z) mower.position.z -= speed; // Vooruit
-    if (keys.s) mower.position.z += speed; // Achteruit
-    if (keys.q) mower.position.x -= speed; // Links
-    if (keys.d) mower.position.x += speed; // Rechts
+    // Beweeg de maaier
+    if (keys['z']) mower.position.z -= speed;
+    if (keys['s']) mower.position.z += speed;
+    if (keys['q']) mower.position.x -= speed;
+    if (keys['d']) mower.position.x += speed;
 
     renderer.render(scene, camera);
 }
 
-// Window resize support
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
