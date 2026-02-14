@@ -1,68 +1,84 @@
 import * as THREE from 'three';
 
-// 1. Scene & Camera opzet
+// 1. Scene & Camera
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111111); // Donkergrijze achtergrond
-
+scene.background = new THREE.Color(0x222222);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
 // 2. Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-document.getElementById('canvas-container').appendChild(renderer.domElement);
+document.body.appendChild(renderer.domElement);
 
-// 3. De Rode Grasmaaier (Kubus)
-// Breedte: 0.75, Hoogte: 0.75, Lengte: 1
+// 3. De Grasmaaier (Kubus)
 const geometry = new THREE.BoxGeometry(0.75, 0.75, 1);
 const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
 const mower = new THREE.Mesh(geometry, material);
-
-// Zet hem exact OP het grid
 mower.position.y = 0.375; 
 scene.add(mower);
 
-// 4. Licht (Essentieel om de kleur te zien!)
-const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+// 4. Licht
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
 scene.add(ambientLight);
+const sunLight = new THREE.DirectionalLight(0xffffff, 1);
+sunLight.position.set(5, 10, 7);
+scene.add(sunLight);
 
-const pointLight = new THREE.PointLight(0xffffff, 10);
-pointLight.position.set(5, 5, 5);
-scene.add(pointLight);
-
-// 5. Grid (Groene lijnen voor gras-gevoel)
-const gridHelper = new THREE.GridHelper(100, 100, 0x00ff00, 0x444444);
-scene.add(gridHelper);
+// 5. Ondergrond
+const grid = new THREE.GridHelper(100, 100, 0x00ff00, 0x444444);
+scene.add(grid);
 
 // 6. Besturing Logica
 const keys = {};
-window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
-window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
-const speed = 0.1;
+// Instellingen voor beweging
+const moveSpeed = 0.1;
+const rotationSpeed = 0.03;
 
-// 7. Animatie Loop
 function animate() {
     requestAnimationFrame(animate);
 
-    // Beweging
-    if (keys['z']) mower.position.z -= speed;
-    if (keys['s']) mower.position.z += speed;
-    if (keys['q']) mower.position.x -= speed;
-    if (keys['d']) mower.position.x += speed;
+    // ROTATIE (L en M toetsen)
+    if (keys['l']) {
+        mower.rotation.y -= rotationSpeed; // Met de klok mee
+    }
+    if (keys['m']) {
+        mower.rotation.y += rotationSpeed; // Tegen de klok in
+    }
 
-    // CAMERA VOLGT DE MAAIER
-    // We plaatsen de camera handmatig elke frame achter de kubus
-    camera.position.x = mower.position.x;
-    camera.position.y = mower.position.y + 3; // 3 meter omhoog
-    camera.position.z = mower.position.z + 5; // 5 meter erachter
+    // BEWEGING (ZQSD) 
+    // We gebruiken nu sinus en cosinus zodat hij rijdt in de richting waar hij naartoe kijkt
+    if (keys['z']) {
+        mower.position.x -= Math.sin(mower.rotation.y) * moveSpeed;
+        mower.position.z -= Math.cos(mower.rotation.y) * moveSpeed;
+    }
+    if (keys['s']) {
+        mower.position.x += Math.sin(mower.rotation.y) * moveSpeed;
+        mower.position.z += Math.cos(mower.rotation.y) * moveSpeed;
+    }
+    // Q en D laten we zijwaarts schuiven (strafe) relatief aan de rotatie
+    if (keys['q']) {
+        mower.position.x -= Math.cos(mower.rotation.y) * moveSpeed;
+        mower.position.z += Math.sin(mower.rotation.y) * moveSpeed;
+    }
+    if (keys['d']) {
+        mower.position.x += Math.cos(mower.rotation.y) * moveSpeed;
+        mower.position.z -= Math.sin(mower.rotation.y) * moveSpeed;
+    }
+
+    // 7. CAMERA FOLLOW LOGICA
+    // De camera staat op een vaste afstand achter de maaier, rekening houdend met de rotatie
+    const offset = new THREE.Vector3(0, 3, 5); // 3m hoog, 5m achter
+    offset.applyQuaternion(mower.quaternion); // Draai de offset mee met de maaier
     
-    // Zorg dat de camera naar de kubus kijkt
+    camera.position.copy(mower.position).add(offset);
     camera.lookAt(mower.position);
 
     renderer.render(scene, camera);
 }
 
-// Window resize
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
