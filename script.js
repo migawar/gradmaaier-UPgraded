@@ -14,7 +14,7 @@ document.body.appendChild(renderer.domElement);
 let geld = 0.00;
 let totaalVerdiend = 0.00; 
 let trofeeën = 0;
-let geclaimdeRewards = 0; // Om bij te houden hoeveel je er al hebt gehad
+let geclaimdeRewards = 0;
 let grasWaarde = 0.01;
 let huidigMowerRadius = 1.0;
 let huidigeSnelheid = 0.12;
@@ -27,7 +27,6 @@ const MAX_RADIUS = 10.0;
 const MAX_WAARDE = 5.01;
 const MAX_VISUELE_GROEI_TROFEEEN = 10;
 
-// --- FORMATTEER FUNCTIE (MIL & MLD) ---
 function formatteerGeld(bedrag) {
     if (bedrag >= 1000000000) return (bedrag / 1000000000).toFixed(2) + " mld";
     if (bedrag >= 1000000) return (bedrag / 1000000).toFixed(2) + " mil";
@@ -35,30 +34,61 @@ function formatteerGeld(bedrag) {
 }
 
 // --- UI ELEMENTEN ---
-
-// Geld (Links)
 const geldDisplay = document.createElement('div');
 geldDisplay.style.cssText = 'position:absolute; top:10px; left:10px; color:white; font-size:24px; font-family:monospace; background:rgba(0,0,0,0.5); padding:10px; border-radius:5px; z-index:10;';
 document.body.appendChild(geldDisplay);
 
-// Trofeeën (Rechts)
 const trofeeDisplay = document.createElement('div');
 trofeeDisplay.style.cssText = 'position:absolute; top:10px; right:10px; color:#f1c40f; font-size:24px; font-family:monospace; background:rgba(0,0,0,0.5); padding:10px; border-radius:5px; border: 2px solid #f1c40f; z-index:10;';
 document.body.appendChild(trofeeDisplay);
 
-// --- REWARDS KNOP (Rechts Midden) ---
+// REWARDS KNOP (Rechts)
 const rewardBtn = document.createElement('button');
 rewardBtn.style.cssText = 'position:absolute; right:10px; top:50%; transform:translateY(-50%); background:#32CD32; color:white; border:none; padding:20px; cursor:pointer; border-radius:10px; font-weight:bold; z-index:10; display:none; flex-direction:column; align-items:center; box-shadow: 0 0 15px #32CD32;';
-rewardBtn.onclick = () => {
+rewardBtn.onclick = claimReward;
+document.body.appendChild(rewardBtn);
+
+// SKIN KNOP (Onderaan Midden)
+const skinBtn = document.createElement('button');
+skinBtn.style.cssText = 'position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:#3498db; color:white; border:none; padding:15px 30px; cursor:pointer; border-radius:5px; font-weight:bold; z-index:10; display:none;';
+skinBtn.innerText = "SKINS";
+skinBtn.onclick = openSkinMenu;
+document.body.appendChild(skinBtn);
+
+// REWARD LOGICA VOLGENS TROFEEËNPAD
+function claimReward() {
     if (trofeeën > geclaimdeRewards) {
-        const bonus = (geclaimdeRewards + 1) * 25000; // Elke volgende reward geeft meer geld
+        let rewardNummer = geclaimdeRewards + 1;
+        let bonus = 0;
+        let bericht = "";
+
+        if (rewardNummer === 1) {
+            bonus = 50000; // Trofee 1: $50.000
+        } else if (rewardNummer === 2) {
+            bonus = 75000; // Trofee 2: $75.000
+        } else if (rewardNummer >= 3 && rewardNummer <= 9) {
+            bonus = Math.floor(Math.random() * (100000 - 10000 + 1)) + 10000; // Trofee 3-9: willekeurig
+        } else if (rewardNummer === 10) {
+            skinBtn.style.display = 'block'; // Trofee 10: Skin knop verschijnt
+            bericht = "Trofee 10 bereikt! Je hebt de SKINS knop ontgrendeld!";
+        }
+
         geld += bonus;
         geclaimdeRewards++;
-        alert(`Reward geclaimd! Je ontvangt een bonus van $${formatteerGeld(bonus)}`);
+        if (bonus > 0) alert(`Reward ${rewardNummer} geclaimd: $${formatteerGeld(bonus)}!`);
+        if (bericht !== "") alert(bericht);
         updateUI();
     }
-};
-document.body.appendChild(rewardBtn);
+}
+
+function openSkinMenu() {
+    let keuze = prompt("Type 'blauw' voor de Blauwe Skin of 'rood' voor Standaard:");
+    if (keuze && keuze.toLowerCase() === 'blauw') {
+        mower.material.color.set(0x0000ff);
+    } else if (keuze && keuze.toLowerCase() === 'rood') {
+        mower.material.color.set(0xff0000);
+    }
+}
 
 // Cheat Knop
 const cheatBtn = document.createElement('button');
@@ -74,7 +104,7 @@ cheatBtn.onclick = () => {
 };
 document.body.appendChild(cheatBtn);
 
-// Menu voor Upgrades (Links)
+// Menu Upgrades
 const menu = document.createElement('div');
 menu.style.cssText = 'position:absolute; left:10px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:10px; z-index:10;';
 document.body.appendChild(menu);
@@ -107,7 +137,6 @@ function updateUI() {
     geldDisplay.innerText = '$ ' + formatteerGeld(geld);
     trofeeDisplay.innerText = '🏆 Trofeeën: ' + trofeeën;
     
-    // Reward knop logica
     const beschikbareRewards = trofeeën - geclaimdeRewards;
     if (beschikbareRewards > 0) {
         rewardBtn.style.display = 'flex';
@@ -125,9 +154,10 @@ function updateUI() {
 }
 
 // 3. DE MAAIER
-const mowerGeo = new THREE.BoxGeometry(1, 1, 1);
-const mowerMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-const mower = new THREE.Mesh(mowerGeo, mowerMat);
+const mower = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial({ color: 0xff0000 })
+);
 mower.scale.set(0.75, 0.75, 1.0);
 mower.position.y = 0.375;
 scene.add(mower);
@@ -145,7 +175,7 @@ function checkTrofee() {
     if (nieuweTrofee) updateUI();
 }
 
-// 4. HET GRASVELD (55x55m)
+// 4. GRASVELD (55x55m)
 const grassArray = [];
 const grassGeo = new THREE.SphereGeometry(0.125, 3, 3); 
 const grassMat = new THREE.MeshStandardMaterial({ color: 0x228b22 });
@@ -198,7 +228,6 @@ function processGrass() {
     }
 }
 
-// 8. ANIMATIE LOOP
 function animate() {
     requestAnimationFrame(animate);
     if (keys['z'] || keys['w']) mower.position.z -= huidigeSnelheid;
