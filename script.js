@@ -119,7 +119,7 @@ window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
 window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
 // 7. LOGICA
-const regrowDelay = 2000; // PRECIES 2 SECONDEN
+const regrowDelay = 4000; // PRECIES 4 SECONDEN
 
 function processGrass() {
     const currentTime = Date.now();
