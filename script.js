@@ -26,14 +26,39 @@ const MAX_RADIUS = 10.0;
 const MAX_WAARDE = 5.01;
 
 // --- UI ELEMENTEN ---
+
+// Geld (Links)
 const geldDisplay = document.createElement('div');
 geldDisplay.style.cssText = 'position:absolute; top:10px; left:10px; color:white; font-size:24px; font-family:monospace; background:rgba(0,0,0,0.5); padding:10px; border-radius:5px; z-index:10;';
 document.body.appendChild(geldDisplay);
 
+// Trofeeën (Rechts)
 const trofeeDisplay = document.createElement('div');
 trofeeDisplay.style.cssText = 'position:absolute; top:10px; right:10px; color:#f1c40f; font-size:24px; font-family:monospace; background:rgba(0,0,0,0.5); padding:10px; border-radius:5px; border: 2px solid #f1c40f; z-index:10;';
 document.body.appendChild(trofeeDisplay);
 
+// --- NIEUW: CHEAT KNOP (Boven Midden) ---
+const cheatBtn = document.createElement('button');
+cheatBtn.style.cssText = 'position:absolute; top:10px; left:50%; transform:translateX(-50%); background:#006400; color:white; border:none; padding:10px 20px; cursor:pointer; border-radius:5px; font-weight:bold; z-index:10;';
+cheatBtn.innerText = "VOER CHEAT IN";
+cheatBtn.onclick = () => {
+    let code = prompt("Voer de cheatcode in:");
+    if (code === "OG-kervelsoeps") {
+        geld += 100000;
+        totaalVerdiend += 100000;
+        huidigMowerRadius = MAX_RADIUS;
+        grasWaarde = MAX_WAARDE;
+        huidigeSnelheid = 0.50; // Extra boost
+        alert("CHEATS GEACTIVEERD! Je bent nu een legende.");
+        updateUI();
+        checkTrofee();
+    } else {
+        alert("Foutieve code!");
+    }
+};
+document.body.appendChild(cheatBtn);
+
+// Menu (Links)
 const menu = document.createElement('div');
 menu.style.cssText = 'position:absolute; left:10px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:10px; z-index:10;';
 document.body.appendChild(menu);
@@ -80,6 +105,9 @@ function updateUI() {
     btnRadius.innerText = huidigMowerRadius >= MAX_RADIUS ? "BEREIK: MAX" : `GROTER BEREIK ($${prijsRadius.toFixed(2)})`;
     btnWaarde.innerText = grasWaarde >= MAX_WAARDE ? "WAARDE: MAX" : `MEER WAARDE ($${prijsWaarde.toFixed(2)})`;
     btnSpeed.innerText = `SNELLER ($${prijsSnelheid.toFixed(2)})`;
+    
+    if(huidigMowerRadius >= MAX_RADIUS) btnRadius.style.background = "#7f8c8d";
+    if(grasWaarde >= MAX_WAARDE) btnWaarde.style.background = "#7f8c8d";
 }
 
 // 3. DE MAAIER
@@ -89,6 +117,16 @@ const mower = new THREE.Mesh(mowerGeo, mowerMat);
 mower.scale.set(0.75, 0.75, 1.0);
 mower.position.y = 0.375;
 scene.add(mower);
+
+function checkTrofee() {
+    while (totaalVerdiend >= (trofeeën + 1) * 100000) {
+        trofeeën++;
+        mower.scale.x += 0.25;
+        mower.scale.y += 0.25;
+        mower.scale.z += 0.25;
+        mower.position.y = (mower.scale.y * 1) / 2;
+    }
+}
 
 // 4. HET GRASVELD (55x55m)
 const grassArray = [];
@@ -119,8 +157,6 @@ window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
 window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
 // 7. LOGICA
-const regrowDelay = 4000; // PRECIES 4 SECONDEN
-
 function processGrass() {
     const currentTime = Date.now();
     for (let i = 0; i < grassArray.length; i++) {
@@ -133,24 +169,13 @@ function processGrass() {
             if (distance + 0.125 <= huidigMowerRadius) {
                 grass.visible = false;
                 grass.userData.mownTime = currentTime;
-                
                 geld += grasWaarde;
                 totaalVerdiend += grasWaarde;
-
-                // CHECK VOOR TROFEE ELKE $100.000
-                if (totaalVerdiend >= (trofeeën + 1) * 100000) {
-                    trofeeën++;
-                    mower.scale.x += 0.25;
-                    mower.scale.y += 0.25;
-                    mower.scale.z += 0.25;
-                    mower.position.y = (mower.scale.y * 1) / 2;
-                }
+                checkTrofee();
                 updateUI();
             }
-        } else if (currentTime - grass.userData.mownTime > regrowDelay) {
-            // TERUGGROEIEN
+        } else if (currentTime - grass.userData.mownTime > 2000) {
             grass.visible = true;
-            grass.userData.mownTime = null;
         }
     }
 }
