@@ -20,7 +20,11 @@ let prijsRadius = 5.00;
 let prijsSnelheid = 5.00;
 let prijsWaarde = 10.00;
 
-// UI Container voor knoppen
+// MAX LEVELS
+const MAX_RADIUS = 10.0;  // Straal van 10 meter is gigantisch
+const MAX_WAARDE = 5.01;  // Ruim 5 dollar per bolletje
+
+// UI Container
 const menu = document.createElement('div');
 menu.style.position = 'absolute';
 menu.style.left = '10px';
@@ -31,7 +35,6 @@ menu.style.flexDirection = 'column';
 menu.style.gap = '10px';
 document.body.appendChild(menu);
 
-// Geld Display
 const geldDisplay = document.createElement('div');
 geldDisplay.style.position = 'absolute';
 geldDisplay.style.top = '10px';
@@ -45,7 +48,6 @@ geldDisplay.style.borderRadius = '5px';
 geldDisplay.innerText = '$ ' + geld.toFixed(2);
 document.body.appendChild(geldDisplay);
 
-// Functie om knoppen te maken
 function maakKnop(tekst, actie) {
     const btn = document.createElement('button');
     btn.style.backgroundColor = '#2ecc71';
@@ -62,10 +64,10 @@ function maakKnop(tekst, actie) {
 }
 
 const btnRadius = maakKnop('', () => {
-    if (geld >= prijsRadius) {
+    if (geld >= prijsRadius && huidigMowerRadius < MAX_RADIUS) {
         geld -= prijsRadius;
-        huidigMowerRadius += 0.45; // VERGROOT MET 0.45 GMET
-        prijsRadius *= 1.5;
+        huidigMowerRadius += 0.45;
+        prijsRadius *= 1.6;
         updateUI();
     }
 });
@@ -80,19 +82,34 @@ const btnSpeed = maakKnop('', () => {
 });
 
 const btnWaarde = maakKnop('', () => {
-    if (geld >= prijsWaarde) {
+    if (geld >= prijsWaarde && grasWaarde < MAX_WAARDE) {
         geld -= prijsWaarde;
-        grasWaarde += 0.10; // WAARDE STIJGT MET $0.10
-        prijsWaarde *= 1.5;
+        grasWaarde += 0.10;
+        prijsWaarde *= 1.7;
         updateUI();
     }
 });
 
 function updateUI() {
     geldDisplay.innerText = '$ ' + geld.toFixed(2);
-    btnRadius.innerText = `GROTER BEREIK ($${prijsRadius.toFixed(2)})\nStraal: ${huidigMowerRadius.toFixed(2)}m (+0.45)`;
-    btnSpeed.innerText = `SNELLER ($${prijsSnelheid.toFixed(2)})\nSnelheid: +1 km/u`;
-    btnWaarde.innerText = `MEER WAARDE ($${prijsWaarde.toFixed(2)})\nPer bol: $${grasWaarde.toFixed(2)} (+$0.10)`;
+    
+    // Radius UI
+    if (huidigMowerRadius >= MAX_RADIUS) {
+        btnRadius.innerText = "GROTER BEREIK\nLEVEL: MAX";
+        btnRadius.style.backgroundColor = "#7f8c8d";
+    } else {
+        btnRadius.innerText = `GROTER BEREIK ($${prijsRadius.toFixed(2)})\nStraal: ${huidigMowerRadius.toFixed(2)}m`;
+    }
+
+    // Waarde UI
+    if (grasWaarde >= MAX_WAARDE) {
+        btnWaarde.innerText = "MEER WAARDE\nLEVEL: MAX";
+        btnWaarde.style.backgroundColor = "#7f8c8d";
+    } else {
+        btnWaarde.innerText = `MEER WAARDE ($${prijsWaarde.toFixed(2)})\nPer bol: $${grasWaarde.toFixed(2)}`;
+    }
+
+    btnSpeed.innerText = `SNELLER ($${prijsSnelheid.toFixed(2)})\nSnelheid: ++`;
 }
 updateUI();
 
@@ -104,13 +121,14 @@ const mower = new THREE.Mesh(
 mower.position.y = 0.375;
 scene.add(mower);
 
-// 4. HET GRASVELD (15x15m veld)
+// 4. HET GRASVELD (Uitgebreid naar 55x55 meter)
 const grassArray = [];
-const grassGeo = new THREE.SphereGeometry(0.125, 4, 4); 
+// Belangrijk: detail naar 3,3 verlaagd om duizenden bollen aan te kunnen
+const grassGeo = new THREE.SphereGeometry(0.125, 3, 3); 
 const grassMat = new THREE.MeshStandardMaterial({ color: 0x228b22 });
 
 const step = 0.35; 
-const fieldSize = 7.5; 
+const fieldSize = 27.5; // Straal van 27.5 geeft 55m totale lengte/breedte
 
 for (let x = -fieldSize; x <= fieldSize; x += step) {
     for (let z = -fieldSize; z <= fieldSize; z += step) {
@@ -135,7 +153,7 @@ window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
 // 7. LOGICA
 const grassRadius = 0.125;
-const regrowDelay = 2000; // NU 2000 MILISECONDEN (1 SECONDE)
+const regrowDelay = 2000; 
 
 function processGrass() {
     const currentTime = Date.now();
@@ -169,7 +187,8 @@ function animate() {
 
     processGrass();
 
-    camera.position.set(mower.position.x, mower.position.y + 6, mower.position.z + 8);
+    // Camera iets verder weg omdat het veld groter is
+    camera.position.set(mower.position.x, mower.position.y + 10, mower.position.z + 12);
     camera.lookAt(mower.position);
 
     renderer.render(scene, camera);
