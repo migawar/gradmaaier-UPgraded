@@ -12,7 +12,7 @@ document.body.appendChild(renderer.domElement);
 
 // --- ECONOMIE & STATS ---
 let geld = 0.00;
-let totaalVerdiend = 0.00; // Om trofeeën te berekenen
+let totaalVerdiend = 0.00; 
 let trofeeën = 0;
 let grasWaarde = 0.01;
 let huidigMowerRadius = 1.0;
@@ -26,25 +26,21 @@ const MAX_RADIUS = 10.0;
 const MAX_WAARDE = 5.01;
 
 // --- UI ELEMENTEN ---
-
-// Geld (Links)
 const geldDisplay = document.createElement('div');
-geldDisplay.style.cssText = 'position:absolute; top:10px; left:10px; color:white; font-size:24px; font-family:monospace; background:rgba(0,0,0,0.5); padding:10px; border-radius:5px;';
+geldDisplay.style.cssText = 'position:absolute; top:10px; left:10px; color:white; font-size:24px; font-family:monospace; background:rgba(0,0,0,0.5); padding:10px; border-radius:5px; z-index:10;';
 document.body.appendChild(geldDisplay);
 
-// Trofeeën (Rechts)
 const trofeeDisplay = document.createElement('div');
-trofeeDisplay.style.cssText = 'position:absolute; top:10px; right:10px; color:#f1c40f; font-size:24px; font-family:monospace; background:rgba(0,0,0,0.5); padding:10px; border-radius:5px; border: 2px solid #f1c40f;';
+trofeeDisplay.style.cssText = 'position:absolute; top:10px; right:10px; color:#f1c40f; font-size:24px; font-family:monospace; background:rgba(0,0,0,0.5); padding:10px; border-radius:5px; border: 2px solid #f1c40f; z-index:10;';
 document.body.appendChild(trofeeDisplay);
 
-// Menu (Links midden)
 const menu = document.createElement('div');
-menu.style.cssText = 'position:absolute; left:10px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:10px;';
+menu.style.cssText = 'position:absolute; left:10px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:10px; z-index:10;';
 document.body.appendChild(menu);
 
 function maakKnop(tekst, actie) {
     const btn = document.createElement('button');
-    btn.style.cssText = 'background:#2ecc71; color:white; border:none; padding:15px; cursor:pointer; border-radius:5px; font-weight:bold; text-align:left;';
+    btn.style.cssText = 'background:#2ecc71; color:white; border:none; padding:15px; cursor:pointer; border-radius:5px; font-weight:bold; text-align:left; min-width:200px;';
     btn.onclick = actie;
     menu.appendChild(btn);
     return btn;
@@ -87,10 +83,9 @@ function updateUI() {
 }
 
 // 3. DE MAAIER
-const mowerGeo = new THREE.BoxGeometry(1, 1, 1); // Starten met 1x1x1 voor makkelijke schaling
+const mowerGeo = new THREE.BoxGeometry(1, 1, 1);
 const mowerMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
 const mower = new THREE.Mesh(mowerGeo, mowerMat);
-// Startgrootte instellen op jouw gevraagde 0.75 x 0.75 x 1
 mower.scale.set(0.75, 0.75, 1.0);
 mower.position.y = 0.375;
 scene.add(mower);
@@ -124,6 +119,8 @@ window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
 window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
 // 7. LOGICA
+const regrowDelay = 2000; // PRECIES 2 SECONDEN
+
 function processGrass() {
     const currentTime = Date.now();
     for (let i = 0; i < grassArray.length; i++) {
@@ -143,17 +140,17 @@ function processGrass() {
                 // CHECK VOOR TROFEE ELKE $100.000
                 if (totaalVerdiend >= (trofeeën + 1) * 100000) {
                     trofeeën++;
-                    // Vergroot maaier: huidige schaal + 0.25
                     mower.scale.x += 0.25;
                     mower.scale.y += 0.25;
                     mower.scale.z += 0.25;
-                    // Pas Y positie aan zodat hij op de grond blijft
                     mower.position.y = (mower.scale.y * 1) / 2;
                 }
                 updateUI();
             }
-        } else if (currentTime - grass.userData.mownTime > 2000) {
+        } else if (currentTime - grass.userData.mownTime > regrowDelay) {
+            // TERUGGROEIEN
             grass.visible = true;
+            grass.userData.mownTime = null;
         }
     }
 }
@@ -169,10 +166,16 @@ function animate() {
 
     processGrass();
 
-    camera.position.set(mower.position.x, mower.position.y + 12, mower.position.z + 15);
+    camera.position.set(mower.position.x, mower.position.y + 15, mower.position.z + 18);
     camera.lookAt(mower.position);
     renderer.render(scene, camera);
 }
 
 updateUI();
 animate();
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
