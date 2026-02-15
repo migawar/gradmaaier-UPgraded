@@ -24,6 +24,18 @@ let prijsWaarde = 10.00;
 
 const MAX_RADIUS = 10.0;
 const MAX_WAARDE = 5.01;
+const MAX_VISUELE_GROEI_TROFEEEN = 10;
+
+// --- FORMATTEER FUNCTIE (MIL & MLD) ---
+function formatteerGeld(bedrag) {
+    if (bedrag >= 1000000000) {
+        return (bedrag / 1000000000).toFixed(2) + " mld";
+    }
+    if (bedrag >= 1000000) {
+        return (bedrag / 1000000).toFixed(2) + " mil";
+    }
+    return bedrag.toFixed(2);
+}
 
 // --- UI ELEMENTEN ---
 
@@ -37,7 +49,7 @@ const trofeeDisplay = document.createElement('div');
 trofeeDisplay.style.cssText = 'position:absolute; top:10px; right:10px; color:#f1c40f; font-size:24px; font-family:monospace; background:rgba(0,0,0,0.5); padding:10px; border-radius:5px; border: 2px solid #f1c40f; z-index:10;';
 document.body.appendChild(trofeeDisplay);
 
-// --- NIEUW: CHEAT KNOP (Boven Midden) ---
+// Cheat Knop (Boven Midden)
 const cheatBtn = document.createElement('button');
 cheatBtn.style.cssText = 'position:absolute; top:10px; left:50%; transform:translateX(-50%); background:#006400; color:white; border:none; padding:10px 20px; cursor:pointer; border-radius:5px; font-weight:bold; z-index:10;';
 cheatBtn.innerText = "VOER CHEAT IN";
@@ -48,8 +60,8 @@ cheatBtn.onclick = () => {
         totaalVerdiend += 100000;
         huidigMowerRadius = MAX_RADIUS;
         grasWaarde = MAX_WAARDE;
-        huidigeSnelheid = 0.50; // Extra boost
-        alert("CHEATS GEACTIVEERD! Je bent nu een legende.");
+        huidigeSnelheid = 0.50;
+        alert("CHEATS GEACTIVEERD!");
         updateUI();
         checkTrofee();
     } else {
@@ -58,14 +70,14 @@ cheatBtn.onclick = () => {
 };
 document.body.appendChild(cheatBtn);
 
-// Menu (Links)
+// Menu voor Upgrades (Links)
 const menu = document.createElement('div');
 menu.style.cssText = 'position:absolute; left:10px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:10px; z-index:10;';
 document.body.appendChild(menu);
 
 function maakKnop(tekst, actie) {
     const btn = document.createElement('button');
-    btn.style.cssText = 'background:#2ecc71; color:white; border:none; padding:15px; cursor:pointer; border-radius:5px; font-weight:bold; text-align:left; min-width:200px;';
+    btn.style.cssText = 'background:#2ecc71; color:white; border:none; padding:15px; cursor:pointer; border-radius:5px; font-weight:bold; text-align:left; min-width:220px;';
     btn.onclick = actie;
     menu.appendChild(btn);
     return btn;
@@ -99,12 +111,12 @@ const btnWaarde = maakKnop('', () => {
 });
 
 function updateUI() {
-    geldDisplay.innerText = '$ ' + geld.toFixed(2);
+    geldDisplay.innerText = '$ ' + formatteerGeld(geld);
     trofeeDisplay.innerText = '🏆 Trofeeën: ' + trofeeën;
     
-    btnRadius.innerText = huidigMowerRadius >= MAX_RADIUS ? "BEREIK: MAX" : `GROTER BEREIK ($${prijsRadius.toFixed(2)})`;
-    btnWaarde.innerText = grasWaarde >= MAX_WAARDE ? "WAARDE: MAX" : `MEER WAARDE ($${prijsWaarde.toFixed(2)})`;
-    btnSpeed.innerText = `SNELLER ($${prijsSnelheid.toFixed(2)})`;
+    btnRadius.innerText = huidigMowerRadius >= MAX_RADIUS ? "BEREIK: MAX" : `GROTER BEREIK ($${formatteerGeld(prijsRadius)})`;
+    btnWaarde.innerText = grasWaarde >= MAX_WAARDE ? "WAARDE: MAX" : `MEER WAARDE ($${formatteerGeld(prijsWaarde)})`;
+    btnSpeed.innerText = `SNELLER ($${formatteerGeld(prijsSnelheid)})`;
     
     if(huidigMowerRadius >= MAX_RADIUS) btnRadius.style.background = "#7f8c8d";
     if(grasWaarde >= MAX_WAARDE) btnWaarde.style.background = "#7f8c8d";
@@ -121,10 +133,12 @@ scene.add(mower);
 function checkTrofee() {
     while (totaalVerdiend >= (trofeeën + 1) * 100000) {
         trofeeën++;
-        mower.scale.x += 0.25;
-        mower.scale.y += 0.25;
-        mower.scale.z += 0.25;
-        mower.position.y = (mower.scale.y * 1) / 2;
+        if (trofeeën <= MAX_VISUELE_GROEI_TROFEEEN) {
+            mower.scale.x += 0.25;
+            mower.scale.y += 0.25;
+            mower.scale.z += 0.25;
+            mower.position.y = (mower.scale.y * 1) / 2;
+        }
     }
 }
 
@@ -157,6 +171,8 @@ window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
 window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
 // 7. LOGICA
+const regrowDelay = 4000; // Gras komt nu na 4 seconden terug
+
 function processGrass() {
     const currentTime = Date.now();
     for (let i = 0; i < grassArray.length; i++) {
@@ -174,33 +190,34 @@ function processGrass() {
                 checkTrofee();
                 updateUI();
             }
-        } else if (currentTime - grass.userData.mownTime > 2000) {
+        } else if (currentTime - grass.userData.mownTime > regrowDelay) {
             grass.visible = true;
         }
     }
 }
 
-// 8. ANIMATIE
+// 8. ANIMATIE LOOP
 function animate() {
     requestAnimationFrame(animate);
 
-    if (keys['z']) mower.position.z -= huidigeSnelheid;
+    if (keys['z'] || keys['w']) mower.position.z -= huidigeSnelheid;
     if (keys['s']) mower.position.z += huidigeSnelheid;
-    if (keys['q']) mower.position.x -= huidigeSnelheid;
+    if (keys['q'] || keys['a']) mower.position.x -= huidigeSnelheid;
     if (keys['d']) mower.position.x += huidigeSnelheid;
 
     processGrass();
 
     camera.position.set(mower.position.x, mower.position.y + 15, mower.position.z + 18);
     camera.lookAt(mower.position);
+
     renderer.render(scene, camera);
 }
-
-updateUI();
-animate();
 
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+updateUI();
+animate();
