@@ -9,7 +9,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 // --- GAME DATA ---
-let geld = 0, totaalVerdiend = 0, totaalGemaaid = 0, totaalUpgrades = 0, speedSpending = 0;
+let geld = 0, totaalVerdiend = 0, totaalGemaaid = 0, totaalUpgrades = 0;
 let trofeeën = 0, geclaimdeTrofeeën = 0, huidigLevel = 1; 
 let grasWaarde = 0.01, huidigeSnelheid = 0.15, huidigMowerRadius = 1.3;
 let prijsRadius = 5, prijsSnelheid = 5, prijsWaarde = 10;
@@ -18,18 +18,14 @@ let actieveOpdracht = null, rewardKlaar = false;
 // EVENT DATA
 const maanden = ["Januari", "Februari", "Maart", "April", "Mei", "Juni", "Juli", "Augustus", "September", "Oktober", "November", "December"];
 const maandSkins = [0xffffff, 0xffc0cb, 0xffd700, 0x00ff00, 0x8b4513, 0x000000, 0xffff00, 0xffa500, 0x800080, 0x006400, 0x808080, 0x8b0000];
-const huidigeMaandIndex = new Date().getMonth();
-const huidigeMaandNaam = maanden[huidigeMaandIndex];
+const huidigeMaandNaam = maanden[new Date().getMonth()];
 
-let eventLevel = 1;
-let eventOpdracht = null; // Specifieke opdracht voor het event
-let eventRewardKlaar = false;
-let skinsUnlocked = ["Red"];
-let huidigeSkin = "Red";
+let eventLevel = 1, eventOpdracht = null, eventRewardKlaar = false;
+let skinsUnlocked = ["Red"], huidigeSkin = "Red";
 const skinKleuren = { "Red": 0xff0000, "Blue": 0x0000ff };
-skinKleuren[huidigeMaandNaam] = maandSkins[huidigeMaandIndex];
+skinKleuren[huidigeMaandNaam] = maandSkins[new Date().getMonth()];
 
-// --- MISSILOGICA (ZOWEL GRASSPASS ALS EVENT) ---
+// --- MISSILOGICA ---
 function genereerMissie(isEvent = false) {
     const types = [
         {id:'m', d:5000, t:"Maai 5000 sprieten"}, 
@@ -39,7 +35,6 @@ function genereerMissie(isEvent = false) {
     const gekozen = types[Math.floor(Math.random()*types.length)];
     
     if (isEvent) {
-        // Event missies schalen met het level
         const factor = 1 + (eventLevel * 0.1);
         eventOpdracht = {
             ...gekozen, 
@@ -49,13 +44,8 @@ function genereerMissie(isEvent = false) {
         };
         eventRewardKlaar = false;
     } else {
-        // Grasspass missie
-        if (huidigLevel === 25) {
-            actieveOpdracht = {id:'m', d:250000, t:"GIGA: Maai 250k sprieten", start:totaalGemaaid, beloning:{type:'g',w:25000}};
-        } else {
-            const b = Math.random() > 0.5 ? {type:'g', w:Math.min(huidigLevel*250, 5000)} : {type:'u', w:Math.min(huidigLevel, 10)};
-            actieveOpdracht = {...gekozen, start: getStat(gekozen.id), beloning: b};
-        }
+        const b = Math.random() > 0.5 ? {type:'g', w:Math.min(huidigLevel*250, 5000)} : {type:'u', w:Math.min(huidigLevel, 10)};
+        actieveOpdracht = {...gekozen, start: getStat(gekozen.id), beloning: b};
         rewardKlaar = false;
     }
 }
@@ -67,13 +57,28 @@ function getStat(id) {
     return 0;
 }
 
+// --- UI HELPERS ---
+const claimButtonStyle = `
+    color: white; 
+    border: none; 
+    padding: 15px 35px; 
+    border-radius: 15px; 
+    cursor: pointer; 
+    font-weight: 900; 
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+    font-size: 18px;
+    letter-spacing: 1px;
+    text-transform: uppercase; 
+    transition: all 0.1s ease;
+`;
+
 // --- UI ---
 const ui = document.createElement('div');
-ui.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; font-family:Impact, sans-serif; z-index:9999;';
+ui.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; font-family: sans-serif; z-index:9999;';
 document.body.appendChild(ui);
 
 const geldBox = document.createElement('div');
-geldBox.style.cssText = 'position:absolute; top:20px; left:20px; background:rgba(0,0,0,0.8); padding:15px 25px; border-radius:10px; border:3px solid #2ecc71; color:#2ecc71; font-size:32px; pointer-events:auto;';
+geldBox.style.cssText = 'position:absolute; top:20px; left:20px; background:rgba(0,0,0,0.8); padding:15px 25px; border-radius:10px; border:3px solid #2ecc71; color:#2ecc71; font-size:32px; font-weight:bold; pointer-events:auto;';
 ui.appendChild(geldBox);
 
 const trofeeStats = document.createElement('div');
@@ -97,19 +102,20 @@ rightBottomMenu.appendChild(eventBtn);
 
 const gpBtn = document.createElement('button');
 gpBtn.innerText = "⭐ GRASSPASS";
-gpBtn.style.cssText = 'position:absolute; bottom:20px; left:20px; background: linear-gradient(to bottom, #f1c40f, #f39c12); color:white; border:3px solid white; padding:20px 40px; border-radius:15px; font-size:24px; cursor:pointer; pointer-events:auto; text-shadow: 2px 2px black;';
+gpBtn.style.cssText = 'position:absolute; bottom:20px; left:20px; background: linear-gradient(to bottom, #f1c40f, #f39c12); color:white; border:3px solid white; padding:20px 40px; border-radius:15px; font-size:24px; cursor:pointer; pointer-events:auto; text-shadow: 2px 2px black; font-weight:bold;';
 ui.appendChild(gpBtn);
 
 const overlay = document.createElement('div');
-overlay.style.cssText = 'position:fixed; top:0; left:-100%; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10000; transition:0.4s; display:flex; align-items:center; justify-content:center; pointer-events:none; color:white;';
+overlay.style.cssText = 'position:fixed; top:0; left:-100%; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10000; transition:0.4s; display:flex; align-items:center; justify-content:center; pointer-events:none; color:white; font-family: sans-serif;';
 document.body.appendChild(overlay);
 
 window.sluitMenu = () => { overlay.style.left = '-100%'; overlay.style.pointerEvents = 'none'; };
 
 function updateUI() {
     geldBox.innerText = `$ ${geld.toLocaleString()}`;
+    trofeeën = Math.floor(totaalVerdiend / 100000);
     trofeeStats.innerHTML = `
-        <div style="background:rgba(0,0,0,0.8); padding:10px 20px; border-radius:10px; border:3px solid #f1c40f; color:#f1c40f; font-size:32px; text-align:right;">🏆 ${trofeeën}</div>
+        <div style="background:rgba(0,0,0,0.8); padding:10px 20px; border-radius:10px; border:3px solid #f1c40f; color:#f1c40f; font-size:32px; text-align:right; font-weight:bold;">🏆 ${trofeeën}</div>
         <button onclick="openTrofeePad()" style="background:#f39c12; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer; font-weight:bold;">TROFEEËNPAD</button>
     `;
     leftMenu.innerHTML = `
@@ -119,75 +125,63 @@ function updateUI() {
         <button onclick="openSkinMenu()" style="width:220px; padding:10px; background:#3498db; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:20px;">👕 SKINS</button>
     `;
 
-    // Check Grasspass voortgang
-    const gpVal = getStat(actieveOpdracht.id) - actieveOpdracht.start;
-    if (gpVal >= actieveOpdracht.d) rewardKlaar = true;
+    if (getStat(actieveOpdracht.id) - actieveOpdracht.start >= actieveOpdracht.d) rewardKlaar = true;
+    if (getStat(eventOpdracht.id) - eventOpdracht.start >= eventOpdracht.d) eventRewardKlaar = true;
 
-    // Check Event voortgang
-    const evVal = getStat(eventOpdracht.id) - eventOpdracht.start;
-    if (evVal >= eventOpdracht.d) eventRewardKlaar = true;
-
-    // Event Button Styling
-    eventBtn.innerText = `📅 ${huidigeMaandNaam.toUpperCase()} (${eventLevel}/100)`;
-    eventBtn.style.cssText = `background:${eventRewardKlaar ? '#f1c40f' : '#9b59b6'}; color:white; border:3px solid white; padding:15px; border-radius:10px; cursor:pointer; font-weight:bold; transition: 0.3s;`;
-    
-    if (totaalVerdiend >= (trofeeën + 1) * 100000) trofeeën++;
+    eventBtn.innerText = `📅 ${huidigeMaandNaam.toUpperCase()} (${eventLevel}${eventLevel > 100 ? '+' : '/100'})`;
+    eventBtn.style.cssText = `background:${eventRewardKlaar ? '#2ecc71' : '#9b59b6'}; color:white; border:3px solid white; padding:15px; border-radius:10px; cursor:pointer; font-weight:bold; transition:0.2s;`;
 }
 
-// --- EVENT MENU ---
-eventBtn.onclick = () => {
-    overlay.style.left = '0'; overlay.style.pointerEvents = 'auto';
-    const v = Math.max(0, getStat(eventOpdracht.id) - eventOpdracht.start);
-    const p = Math.min(Math.floor((v / eventOpdracht.d) * 100), 100);
-    
-    overlay.innerHTML = `<div style="background:#2c3e50; padding:40px; border:5px solid #9b59b6; border-radius:30px; text-align:center; width:500px; position:relative;">
-        <button onclick="sluitMenu()" style="position:absolute; top:15px; right:15px; background:#e74c3c; color:white; border:none; border-radius:50%; width:40px; height:40px; cursor:pointer;">X</button>
-        <h1 style="color:#9b59b6; margin:0;">${huidigeMaandNaam.toUpperCase()} EVENT</h1>
-        <h2 style="color:white;">LEVEL ${eventLevel} / 100</h2>
-        <p style="background:rgba(0,0,0,0.3); padding:10px; border-radius:10px;"><b>OPDRACHT:</b><br>${eventOpdracht.t}</p>
-        <div style="width:100%; height:30px; background:#333; border-radius:15px; margin:20px 0; border:2px solid white; overflow:hidden;">
-            <div style="width:${p}%; height:100%; background:#9b59b6;"></div>
-        </div>
-        <p>${v.toLocaleString()} / ${eventOpdracht.d.toLocaleString()}</p>
-        <button onclick="claimEventReward()" style="background:${eventRewardKlaar ? '#2ecc71' : '#555'}; color:white; padding:15px 30px; border-radius:10px; cursor:pointer; border:none; font-weight:bold; margin-top:10px;">
-            ${eventRewardKlaar ? '🎁 CLAIM BELONING' : '🔒 BEZIG MET OPDRACHT...'}
-        </button>
-    </div>`;
-};
-
-window.claimEventReward = () => {
-    if (eventRewardKlaar && eventLevel <= 100) {
-        if (eventLevel < 100) {
-            let winst = Math.floor(Math.random() * 901) + 100;
-            geld += winst; totaalVerdiend += winst;
-            alert(`Event Level ${eventLevel} voltooid! +$${winst}`);
-        } else {
-            skinsUnlocked.push(huidigeMaandNaam);
-            alert(`GIGANTISCH! Je hebt de ${huidigeMaandNaam} Skin vrijgespeeld!`);
-        }
-        eventLevel++;
-        genereerMissie(true); // Nieuwe event missie
-        updateUI();
-        sluitMenu();
+// --- MENUS ---
+window.claimTrofee = (nr) => {
+    if (nr === geclaimdeTrofeeën + 1) {
+        geclaimdeTrofeeën++;
+        let beloning = Math.min(Math.floor(Math.random() * 15000) + 10000, 25000);
+        if (nr === 10) skinsUnlocked.push("Blue");
+        geld += beloning; totaalVerdiend += beloning; updateUI(); openTrofeePad();
     }
 };
 
-// --- GRASSPASS MENU ---
-gpBtn.onclick = () => {
+window.openTrofeePad = () => {
     overlay.style.left = '0'; overlay.style.pointerEvents = 'auto';
-    const v = Math.max(0, getStat(actieveOpdracht.id) - actieveOpdracht.start);
-    const p = Math.min(Math.floor((v / actieveOpdracht.d) * 100), 100);
-    overlay.innerHTML = `<div style="background: linear-gradient(135deg, #2c3e50, #000); padding:50px; border:5px solid #f1c40f; border-radius:30px; text-align:center; width:500px; position:relative;">
+    let padHTML = `<div style="background:#111; padding:40px; border:5px solid #f1c40f; border-radius:30px; width:600px; max-height:80vh; display:flex; flex-direction:column; position:relative;">
         <button onclick="sluitMenu()" style="position:absolute; top:15px; right:15px; background:#e74c3c; color:white; border:none; border-radius:50%; width:40px; height:40px; cursor:pointer;">X</button>
-        <h1 style="color:#f1c40f; font-size:48px; margin:0;">GRASS PASS</h1>
-        <h2 style="color:white; margin:10px 0;">LEVEL ${huidigLevel}</h2>
-        <p style="font-size:18px;">${actieveOpdracht.t}</p>
-        <div style="width:100%; height:35px; background:#333; border-radius:20px; margin:20px 0; border:2px solid white; overflow:hidden;"><div style="width:${p}%; height:100%; background:#f1c40f;"></div></div>
-        <p>${v.toLocaleString()} / ${actieveOpdracht.d.toLocaleString()}</p>
-        <button onclick="claimReward()" style="background:${rewardKlaar ? '#2ecc71' : '#444'}; color:white; padding:15px 30px; border-radius:10px; cursor:pointer; border:none; font-weight:bold;">
-            ${rewardKlaar ? '🎁 CLAIM' : 'LOCK'}
-        </button>
-    </div>`;
+        <h1 style="color:#f1c40f; font-family: Impact;">TROFEEËNPAD</h1>
+        <div style="flex-grow:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">`;
+    for (let i = 1; i <= Math.max(trofeeën + 2, 12); i++) {
+        let isClaimed = i <= geclaimdeTrofeeën;
+        let canClaim = i <= trofeeën;
+        let st = isClaimed ? "✅" : (canClaim ? `<button onclick="claimTrofee(${i})" style="${claimButtonStyle} background:#2ecc71; padding:5px 10px; font-size:12px;">CLAIM</button>` : "🔒");
+        padHTML += `<div style="background:#222; padding:15px; border-radius:15px; display:flex; justify-content:space-between; align-items:center;"><span>🏆 Trofee ${i}</span><span>${st}</span></div>`;
+    }
+    padHTML += `</div></div>`; overlay.innerHTML = padHTML;
+};
+
+window.openSkinMenu = () => {
+    overlay.style.left = '0'; overlay.style.pointerEvents = 'auto';
+    let h = `<div style="background: linear-gradient(135deg, #1a1a1a, #000); padding:40px; border:4px solid #3498db; border-radius:30px; text-align:center; width:550px;">
+        <h1 style="color:#3498db; font-size:36px; margin-bottom:25px; font-family: Impact;">👕 GARAGE</h1>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-bottom:30px;">`;
+    Object.keys(skinKleuren).forEach(s => {
+        const un = skinsUnlocked.includes(s);
+        const isCurrent = huidigeSkin === s;
+        h += `<div style="background:${un ? '#333' : '#111'}; padding:15px; border-radius:15px; border:2px solid ${isCurrent ? '#2ecc71' : (un ? '#444' : '#222')}; display:flex; flex-direction:column; align-items:center; gap:10px;">
+            <div style="width:40px; height:40px; background-color:${'#' + skinKleuren[s].toString(16).padStart(6, '0')}; border-radius:8px; border:2px solid white;"></div>
+            <span style="font-size:12px; font-weight: bold;">${s.toUpperCase()}</span>
+            <button onclick="${un ? `setSkin('${s}')` : ''}" style="width:100%; padding:8px; border-radius:8px; border:none; background:${isCurrent ? '#2ecc71' : (un ? '#3498db' : '#222')}; color:white; cursor:${un ? 'pointer' : 'default'}; font-size:11px; font-weight:bold;">${isCurrent ? 'GEBRUIKT' : (un ? 'KIES' : '🔒')}</button>
+        </div>`;
+    });
+    h += `</div><button onclick="sluitMenu()" style="background:#444; color:white; border:none; padding:12px 40px; border-radius:12px; cursor:pointer; font-weight:bold;">TERUG</button></div>`;
+    overlay.innerHTML = h;
+};
+
+// --- CLAIM LOGICA ---
+window.claimEventReward = () => {
+    if (eventRewardKlaar) {
+        if (eventLevel === 100 && !skinsUnlocked.includes(huidigeMaandNaam)) skinsUnlocked.push(huidigeMaandNaam);
+        else geld += 500;
+        eventLevel++; genereerMissie(true); updateUI(); sluitMenu();
+    }
 };
 
 window.claimReward = () => {
@@ -198,65 +192,64 @@ window.claimReward = () => {
     }
 };
 
-// --- STANDAARD FUNCTIES (SKINS, TROFEE, KOOP) ---
-window.openSkinMenu = () => {
+// --- MENU TRIGGERS (Met Percentage op de Balk) ---
+eventBtn.onclick = () => {
     overlay.style.left = '0'; overlay.style.pointerEvents = 'auto';
-    let html = `<div style="background:#222; padding:40px; border:5px solid #3498db; border-radius:30px; text-align:center; min-width:400px; max-height:80vh; overflow-y:auto;">
-        <h1 style="color:#3498db;">SKINS</h1>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin:20px 0;">`;
-    Object.keys(skinKleuren).forEach(s => {
-        const un = skinsUnlocked.includes(s);
-        html += `<button onclick="${un ? `setSkin('${s}')` : ''}" style="padding:15px; background:${un ? (huidigeSkin === s ? '#2ecc71' : '#444') : '#111'}; color:white; border:none; border-radius:10px; cursor:pointer;">${s} ${un ? '' : '🔒'}</button>`;
-    });
-    html += `</div><button onclick="sluitMenu()">SLUIT</button></div>`;
-    overlay.innerHTML = html;
+    const v = Math.max(0, getStat(eventOpdracht.id) - eventOpdracht.start);
+    const p = Math.min((v / eventOpdracht.d) * 100, 100).toFixed(1);
+    const text = eventRewardKlaar ? "CLAIM NU" : "LOCKED";
+    
+    overlay.innerHTML = `<div style="background:#2c3e50; padding:40px; border:5px solid #9b59b6; border-radius:30px; text-align:center; width:500px;">
+        <h1 style="color:#9b59b6; font-family: Impact;">EVENT</h1>
+        <p style="font-weight: bold;">${eventOpdracht.t}</p>
+        <div style="width:100%; height:35px; background:#333; border-radius:15px; margin:20px 0; border:2px solid white; overflow:hidden; position:relative;">
+            <div style="width:${p}%; height:100%; background:#9b59b6; transition:0.3s;"></div>
+            <div style="position:absolute; width:100%; top:0; left:0; line-height:35px; font-weight:900; color:white; text-shadow:1px 1px 2px black;">${p}%</div>
+        </div>
+        <button onclick="${eventRewardKlaar ? 'claimEventReward()' : ''}" style="${claimButtonStyle} background:${eventRewardKlaar ? '#2ecc71' : '#555'}; box-shadow:${eventRewardKlaar ? '0 4px 0 #27ae60' : 'none'};">${text}</button>
+        <br><button onclick="sluitMenu()" style="margin-top:15px; background:none; color:white; border:none; cursor:pointer;">Annuleren</button>
+    </div>`;
 };
 
-window.setSkin = (s) => { huidigeSkin = s; mower.material.color.set(skinKleuren[s]); sluitMenu(); };
-
-window.openTrofeePad = () => {
+gpBtn.onclick = () => {
     overlay.style.left = '0'; overlay.style.pointerEvents = 'auto';
-    let padHTML = `<div style="background:#111; padding:40px; border:5px solid #f1c40f; border-radius:30px; width:600px; max-height:80vh; display:flex; flex-direction:column; position:relative;">
-        <button onclick="sluitMenu()" style="position:absolute; top:15px; right:15px; background:#e74c3c; color:white; border:none; border-radius:50%; width:40px; height:40px; cursor:pointer;">X</button>
-        <h1 style="color:#f1c40f;">TROFEEËNPAD</h1>
-        <div style="flex-grow:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">`;
-    for (let i = 1; i <= Math.max(trofeeën + 2, 10); i++) {
-        let status = (i <= geclaimdeTrofeeën) ? "✅" : (i <= trofeeën) ? `<button onclick="claimTrofee(${i})">CLAIM</button>` : "🔒";
-        padHTML += `<div style="background:#222; padding:15px; border-radius:15px; display:flex; justify-content:space-between; border:1px solid #444;"><span>🏆 Trofee ${i}</span><span>${status}</span></div>`;
-    }
-    padHTML += `</div></div>`; overlay.innerHTML = padHTML;
+    const v = Math.max(0, getStat(actieveOpdracht.id) - actieveOpdracht.start);
+    const p = Math.min((v / actieveOpdracht.d) * 100, 100).toFixed(1);
+    const text = rewardKlaar ? "CLAIM NU" : "LOCKED";
+
+    overlay.innerHTML = `<div style="background: linear-gradient(135deg, #2c3e50, #000); padding:50px; border:5px solid #f1c40f; border-radius:30px; text-align:center; width:500px;">
+        <h1 style="color:#f1c40f; font-family: Impact;">GRASS PASS</h1>
+        <p style="font-weight: bold;">${actieveOpdracht.t}</p>
+        <div style="width:100%; height:40px; background:#333; border-radius:20px; margin:20px 0; border:2px solid white; overflow:hidden; position:relative;">
+            <div style="width:${p}%; height:100%; background:#f1c40f; transition:0.3s;"></div>
+            <div style="position:absolute; width:100%; top:0; left:0; line-height:40px; font-weight:900; color:white; text-shadow:1px 1px 2px black;">${p}%</div>
+        </div>
+        <button onclick="${rewardKlaar ? 'claimReward()' : ''}" style="${claimButtonStyle} background:${rewardKlaar ? '#2ecc71' : '#444'}; box-shadow:${rewardKlaar ? '0 4px 0 #27ae60' : 'none'};">${text}</button>
+        <br><button onclick="sluitMenu()" style="margin-top:15px; background:none; color:white; border:none; cursor:pointer;">Annuleren</button>
+    </div>`;
 };
 
-window.claimTrofee = (nr) => {
-    if (nr === geclaimdeTrofeeën + 1) {
-        geclaimdeTrofeeën++;
-        let b = (nr === 1) ? 50000 : (nr === 2) ? 75000 : Math.floor(Math.random() * 85001) + 10000;
-        if (nr === 10) skinsUnlocked.push("Blue");
-        geld += b; totaalVerdiend += b; updateUI(); openTrofeePad();
-    }
-};
-
+window.setSkin = (s) => { huidigeSkin = s; mower.material.color.set(skinKleuren[s]); openSkinMenu(); };
 window.koop = (t) => {
     if (t === 'r' && geld >= prijsRadius) { geld -= prijsRadius; huidigMowerRadius += 0.3; prijsRadius *= 1.6; totaalUpgrades++; }
-    if (t === 's' && geld >= prijsSnelheid) { geld -= prijsSnelheid; speedSpending += prijsSnelheid; huidigeSnelheid += 0.02; prijsSnelheid *= 1.6; totaalUpgrades++; }
+    if (t === 's' && geld >= prijsSnelheid) { geld -= prijsSnelheid; huidigeSnelheid += 0.02; prijsSnelheid *= 1.6; totaalUpgrades++; }
     if (t === 'w' && geld >= prijsWaarde) { geld -= prijsWaarde; grasWaarde += 0.01; prijsWaarde *= 1.7; totaalUpgrades++; }
     updateUI();
 };
 
 cheatBtn.onclick = () => {
     const code = prompt("Code:");
-    if(code === "OG-kervelsoeps") { geld += 50000; alert("Code OK! +$50.000"); }
-    else if(code === "!wannaBEop") { geld += 100000; alert("Code OK! +$100.000"); }
-    else if(code === "YEAHman") { geld += 250000; alert("Code OK! +$250.000"); }
+    if(code === "EVENT-EXPRESS") { eventLevel = 99; genereerMissie(true); }
+    else if(code === "OG-kervelsoeps") { geld += 50000; totaalVerdiend += 50000; }
+    else if(code === "!wannaBEop") { geld += 100000; totaalVerdiend += 100000; }
+    else if(code === "YEAHman") { geld += 250000; totaalVerdiend += 250000; }
     updateUI();
 };
 
-// --- 3D WORLD ---
 const mower = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), new THREE.MeshStandardMaterial({color: 0xff0000}));
 scene.add(mower);
 scene.add(new THREE.AmbientLight(0xffffff, 0.9));
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(5, 15, 5); scene.add(light);
+const light = new THREE.DirectionalLight(0xffffff, 1); light.position.set(5, 15, 5); scene.add(light);
 camera.position.set(0, 15, 15);
 
 const grassArr = [];
@@ -273,25 +266,21 @@ window.onkeyup=(e)=>keys[e.key.toLowerCase()]=false;
 
 function animate() {
     requestAnimationFrame(animate);
-    const nu = Date.now();
     if(keys['w']||keys['z']) mower.position.z -= huidigeSnelheid;
     if(keys['s']) mower.position.z += huidigeSnelheid;
     if(keys['a']||keys['q']) mower.position.x -= huidigeSnelheid;
     if(keys['d']) mower.position.x += huidigeSnelheid;
     grassArr.forEach(g => {
         if(g.visible && mower.position.distanceTo(g.position) < huidigMowerRadius) {
-            g.visible = false; g.userData.cut = nu;
+            g.visible = false; g.userData.cut = Date.now();
             geld += grasWaarde; totaalVerdiend += grasWaarde; totaalGemaaid++; 
             updateUI();
         }
-        if(!g.visible && nu - g.userData.cut > 8000) g.visible = true;
+        if(!g.visible && Date.now() - g.userData.cut > 8000) g.visible = true;
     });
     camera.position.set(mower.position.x, 15, mower.position.z + 15);
     camera.lookAt(mower.position);
     renderer.render(scene, camera);
 }
 
-genereerMissie(false); 
-genereerMissie(true); 
-updateUI(); 
-animate();
+genereerMissie(false); genereerMissie(true); updateUI(); animate();
