@@ -14,9 +14,11 @@ let trofeeën = 0, huidigLevel = 1;
 let grasWaarde = 0.01, huidigeSnelheid = 0.15, huidigMowerRadius = 1.3;
 let prijsRadius = 5, prijsSnelheid = 5, prijsWaarde = 10;
 let actieveOpdracht = null;
+let rewardKlaar = false;
 
 // --- LOGICA ---
 function genereerMissie() {
+    rewardKlaar = false;
     if (huidigLevel <= 24) {
         const types = [{id:'m',d:5000,t:"Maai 5000 grassprieten"}, {id:'u',d:5,t:"Koop 5 upgrades"}, {id:'v',d:500,t:"Verdien $500"}, {id:'s',d:50,t:"Spendeer $50 aan snelheid"}];
         const m = types[Math.floor(Math.random()*types.length)];
@@ -41,22 +43,18 @@ const ui = document.createElement('div');
 ui.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; font-family:Impact, sans-serif; z-index:9999;';
 document.body.appendChild(ui);
 
-// GELD LINKSBOVEN
 const geldBox = document.createElement('div');
 geldBox.style.cssText = 'position:absolute; top:20px; left:20px; background:rgba(0,0,0,0.8); padding:15px 25px; border-radius:10px; border:3px solid #2ecc71; color:#2ecc71; font-size:32px; pointer-events:auto;';
 ui.appendChild(geldBox);
 
-// TROFEEEN RECHTSBOVEN
 const trofeeBox = document.createElement('div');
 trofeeBox.style.cssText = 'position:absolute; top:20px; right:20px; background:rgba(0,0,0,0.8); padding:15px 25px; border-radius:10px; border:3px solid #f1c40f; color:#f1c40f; font-size:32px; pointer-events:auto;';
 ui.appendChild(trofeeBox);
 
-// UPGRADES (LINKS IN HET MIDDEN)
 const upgradeBox = document.createElement('div');
 upgradeBox.style.cssText = 'position:absolute; top:50%; left:20px; transform:translateY(-50%); display:flex; flex-direction:column; gap:15px; pointer-events:auto;';
 ui.appendChild(upgradeBox);
 
-// CHEAT REDEEM KNOP (RECHTSONDER)
 const cheatRedeemBtn = document.createElement('button');
 cheatRedeemBtn.innerText = "🔑 REDEEM CODE";
 cheatRedeemBtn.style.cssText = 'position:absolute; bottom:20px; right:20px; background:#e74c3c; color:white; border:none; padding:15px; border-radius:10px; cursor:pointer; pointer-events:auto; font-weight:bold;';
@@ -70,14 +68,13 @@ cheatRedeemBtn.onclick = () => {
 };
 ui.appendChild(cheatRedeemBtn);
 
-// GRASSPASS KNOP (LINKSONDER)
 const gpBtn = document.createElement('button');
 gpBtn.innerText = "⭐ GRASSPASS";
 gpBtn.style.cssText = 'position:absolute; bottom:20px; left:20px; background: linear-gradient(to bottom, #f1c40f, #f39c12); color:white; border:3px solid white; padding:20px 40px; border-radius:15px; font-size:24px; cursor:pointer; pointer-events:auto; text-shadow: 2px 2px black;';
 ui.appendChild(gpBtn);
 
 const overlay = document.createElement('div');
-overlay.style.cssText = 'position:fixed; top:0; left:-100%; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:10000; transition:0.4s; display:flex; align-items:center; justify-content:center; pointer-events:auto; color:white;';
+overlay.style.cssText = 'position:fixed; top:0; left:-100%; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10000; transition:0.4s; display:flex; align-items:center; justify-content:center; pointer-events:auto; color:white;';
 document.body.appendChild(overlay);
 
 function updateUI() {
@@ -98,10 +95,30 @@ function updateUI() {
 
     const v = getStat(actieveOpdracht.id) - actieveOpdracht.start;
     if (v >= actieveOpdracht.d) {
-        if (actieveOpdracht.beloning.type === 'g') geld += actieveOpdracht.beloning.w;
-        huidigLevel++; genereerMissie();
+        rewardKlaar = true;
     }
 }
+
+window.claimReward = () => {
+    if (rewardKlaar) {
+        if (actieveOpdracht.beloning.type === 'g') {
+            geld += actieveOpdracht.beloning.w;
+            totaalVerdiend += actieveOpdracht.beloning.w;
+        } else {
+            // Gratis upgrades logica
+            for(let i=0; i<actieveOpdracht.beloning.w; i++) {
+                huidigMowerRadius += 0.1; huidigeSnelheid += 0.01;
+            }
+        }
+        alert("Beloning geclaimd!");
+        huidigLevel++;
+        genereerMissie();
+        updateUI();
+        gpBtn.click(); // Ververs pop-up
+    } else {
+        alert("Opdracht nog niet voltooid!");
+    }
+};
 
 window.koop = (t) => {
     if (t === 'r' && geld >= prijsRadius) { geld -= prijsRadius; huidigMowerRadius += 0.3; prijsRadius *= 1.6; totaalUpgrades++; }
@@ -114,19 +131,31 @@ gpBtn.onclick = () => {
     overlay.style.left = '0';
     const v = getStat(actieveOpdracht.id) - actieveOpdracht.start;
     const p = Math.min(Math.floor((v / actieveOpdracht.d) * 100), 100);
+    
     overlay.innerHTML = `
-        <div style="background: linear-gradient(135deg, #2c3e50, #000); padding:50px; border:5px solid #f1c40f; border-radius:30px; text-align:center; width:500px; box-shadow: 0 0 50px #f1c40f;">
+        <div style="background: linear-gradient(135deg, #2c3e50, #000); padding:50px; border:5px solid #f1c40f; border-radius:30px; text-align:center; width:500px; box-shadow: 0 0 50px #f1c40f; position:relative;">
+            
+            <button onclick="claimReward()" style="background:${rewardKlaar ? '#2ecc71' : '#555'}; color:white; border:3px solid white; padding:10px 30px; border-radius:10px; font-size:20px; font-weight:bold; cursor:pointer; margin-bottom:20px; ${rewardKlaar ? 'animation: pulse 1s infinite;' : ''}">
+                ${rewardKlaar ? '🎁 CLAIM REWARD' : '🔒 IN PROGRESS'}
+            </button>
+
             <h1 style="color:#f1c40f; font-size:52px; margin:0; text-shadow: 3px 3px black;">GRASS PASS</h1>
             <h2 style="color:white; margin:10px 0;">LEVEL ${huidigLevel}</h2>
             <p style="font-size:22px; color:#ddd;">${actieveOpdracht.t}</p>
+            
             <div style="width:100%; height:45px; background:#333; border-radius:25px; margin:25px 0; border:3px solid white; overflow:hidden; position:relative;">
                 <div style="width:${p}%; height:100%; background:linear-gradient(90deg, #f1c40f, #f39c12); transition:0.8s ease-out;"></div>
                 <div style="position:absolute; width:100%; top:8px; left:0; font-weight:bold; color:white; text-shadow: 1px 1px 2px black;">${p}%</div>
             </div>
+            
             <p style="font-size:24px;">${v.toLocaleString()} / ${actieveOpdracht.d.toLocaleString()}</p>
-            <p style="color:#2ecc71; font-size:26px; font-weight:bold;">REWARD: ${actieveOpdracht.beloning.txt}</p>
-            <button onclick="this.parentElement.parentElement.style.left='-100%'" style="margin-top:20px; padding:15px 45px; background:white; color:black; border:none; border-radius:12px; font-size:20px; font-weight:bold; cursor:pointer;">CLOSE</button>
-        </div>`;
+            <p style="color:#2ecc71; font-size:26px; font-weight:bold;">BELONING: ${actieveOpdracht.beloning.txt}</p>
+            
+            <button onclick="this.parentElement.parentElement.style.left='-100%'" style="margin-top:20px; padding:15px 45px; background:white; color:black; border:none; border-radius:12px; font-size:20px; font-weight:bold; cursor:pointer;">BACK TO MOWING</button>
+        </div>
+        <style>
+            @keyframes pulse { 0% {transform: scale(1);} 50% {transform: scale(1.05);} 100% {transform: scale(1);} }
+        </style>`;
 };
 
 // --- 3D WORLD ---
