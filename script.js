@@ -114,8 +114,9 @@ window.openTrofee = () => {
     let h = `<div style="background:#111; padding:40px; border:8px solid #f1c40f; border-radius:30px; text-align:center; min-width:500px; max-height:85vh; overflow-y:auto;"><h1 style="color:#f1c40f; font-size:55px;">🏆 TROFEEËNPAD</h1><p style="margin-bottom:20px;">VERDIEN $100.000 PER TROFEE</p>`;
     for(let i=1; i<=10; i++) {
         let geclaimd = i <= geclaimdeTrofeeën, kan = i <= trofeeën && !geclaimd;
-        // BLUE SKIN IS NU OP TROFEE 10
-        let bel = i === 10 ? "BLUE SKIN" : `$${(i*20000).toLocaleString()}`;
+        // Beloningen aangepast: stijgen per $7.500 (blijft ruim onder $100k)
+        let belBedrag = i * 7500;
+        let bel = i === 10 ? "BLUE SKIN" : `$${belBedrag.toLocaleString()}`;
         h += `<div style="padding:20px; margin:10px; background:#222; border-radius:15px; display:flex; justify-content:space-between; align-items:center; border:3px solid ${geclaimd?'#2ecc71':(kan?'#f1c40f':'#444')};">
             <div style="text-align:left;"><div style="font-size:24px;">TROFEE ${i}</div><div style="color:#aaa;">BELONING: ${bel}</div></div>
             ${geclaimd ? "✅" : (kan ? `<button onclick="window.claimT(${i})" style="background:#2ecc71; color:white; border:none; padding:12px 25px; border-radius:10px; cursor:pointer; font-family:Impact; font-size:18px;">CLAIM</button>` : "🔒")}
@@ -131,13 +132,13 @@ window.claimT = (i) => {
             ontgrendeldeSkins.push("BLUE");
             alert("LEGENDARISCH! Je hebt de BLUE SKIN vrijgespeeld op Trofee 10!");
         } else { 
-            geld += i*20000; 
+            geld += i * 7500; 
         } 
         window.openTrofee(); window.updateUI(); 
     } 
 };
 
-// --- REST VAN DE SYSTEMEN (SKINS, GP, EVENTS, SAVE) ---
+// --- 5. SKINS, GP, EVENTS ---
 window.openSkins = () => {
     overlay.style.left = '0'; overlay.style.pointerEvents = 'auto';
     let h = `<div style="background:#111; padding:40px; border:8px solid #3498db; border-radius:30px; text-align:center; max-width:80%; max-height:80vh; overflow-y:auto;"><h1 style="color:#3498db; font-size:50px; margin-bottom:20px;">👕 SKINS</h1><div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:15px;">`;
@@ -156,8 +157,9 @@ window.openGP = () => {
     overlay.style.left = '0'; overlay.style.pointerEvents = 'auto';
     const v = Math.min(window.getStat(actieveOpdracht.id)-actieveOpdracht.start, actieveOpdracht.d);
     overlay.innerHTML = `<div style="background:#111; padding:60px; border:10px solid #f1c40f; border-radius:40px; text-align:center;">
-        <h1 style="color:#f1c40f; font-size:70px;">⭐ GRASS PASS</h1>
-        <p style="font-size:30px;">${actieveOpdracht.t}</p>
+        <h1 style="color:#f1c40f; font-size:70px; margin-bottom:5px;">⭐ GRASS PASS</h1>
+        <h2 style="color:white; font-size:30px; margin-top:0; opacity:0.8;">LEVEL ${gpLevel}</h2>
+        <p style="font-size:30px; margin-top:20px;">${actieveOpdracht.t}</p>
         <div style="width:500px; height:40px; background:#333; border:4px solid white; margin:30px auto; border-radius:20px; overflow:hidden;"><div style="width:${(v/actieveOpdracht.d*100)}%; height:100%; background:#f1c40f;"></div></div>
         <button onclick="window.claimGP()" style="padding:25px 70px; background:${rewardKlaar?'#2ecc71':'#444'}; font-family:Impact; font-size:32px; color:white; cursor:pointer; border:none; border-radius:20px;">${rewardKlaar?'CLAIM $5.000':'LOCKED'}</button>
         <br><button onclick="window.sluit()" style="margin-top:30px; color:gray; background:none; border:none; cursor:pointer; font-size:20px;">SLUITEN</button></div>`;
@@ -168,19 +170,27 @@ window.openEvent = () => {
     overlay.style.left = '0'; overlay.style.pointerEvents = 'auto';
     const v = Math.min(window.getStat(eventOpdracht.id)-eventOpdracht.start, eventOpdracht.d);
     overlay.innerHTML = `<div style="background:#111; padding:60px; border:10px solid #9b59b6; border-radius:40px; text-align:center;">
-        <h1 style="color:#9b59b6; font-size:70px;">📅 ${huidigeMaandNaam}</h1>
-        <p style="font-size:30px;">${eventOpdracht.t}</p>
+        <h1 style="color:#9b59b6; font-size:70px; margin-bottom:5px;">📅 ${huidigeMaandNaam}</h1>
+        <h2 style="color:white; font-size:30px; margin-top:0; opacity:0.8;">EVENT LEVEL ${eventLevel}</h2>
+        <p style="font-size:30px; margin-top:20px;">${eventOpdracht.t}</p>
         <div style="width:500px; height:40px; background:#333; border:4px solid white; margin:30px auto; border-radius:20px; overflow:hidden;"><div style="width:${(v/eventOpdracht.d*100)}%; height:100%; background:#9b59b6;"></div></div>
         <button onclick="window.claimEvent()" style="padding:25px 70px; background:${eventRewardKlaar?'#2ecc71':'#444'}; font-family:Impact; font-size:32px; color:white; cursor:pointer; border:none; border-radius:20px;">${eventRewardKlaar?`CLAIM SKIN`:'VERGRENDELD'}</button>
         <br><button onclick="window.sluit()" style="margin-top:30px; color:gray; background:none; border:none; cursor:pointer; font-size:20px;">SLUITEN</button></div>`;
 };
 window.claimEvent = () => { if(eventRewardKlaar) { if(!ontgrendeldeSkins.includes(huidigeMaandNaam)) ontgrendeldeSkins.push(huidigeMaandNaam); eventLevel++; window.genereerMissie(true); window.sluit(); window.updateUI(); } };
 
+// --- 6. SETTINGS & AUTO-SAVE ---
+window.toggleAutoSave = () => {
+    autoSaveOnd = !autoSaveOnd;
+    if(autoSaveOnd) window.save();
+    window.openSettings();
+};
+
 window.openSettings = () => {
     overlay.style.left = '0'; overlay.style.pointerEvents = 'auto';
     overlay.innerHTML = `<div style="background:#111; padding:60px; border:8px solid white; border-radius:30px; text-align:center;">
         <h1 style="font-size:60px;">INSTELLINGEN</h1>
-        <button onclick="autoSaveOnd = !autoSaveOnd; window.openSettings();" style="width:400px; padding:25px; background:${autoSaveOnd?'#2ecc71':'#e74c3c'}; color:white; font-family:Impact; font-size:30px; cursor:pointer; border:none; border-radius:20px; margin-bottom:20px;">AUTO-SAVE: ${autoSaveOnd?'AAN':'UIT'}</button>
+        <button onclick="window.toggleAutoSave()" style="width:400px; padding:25px; background:${autoSaveOnd?'#2ecc71':'#e74c3c'}; color:white; font-family:Impact; font-size:30px; cursor:pointer; border:none; border-radius:20px; margin-bottom:20px;">AUTO-SAVE: ${autoSaveOnd?'AAN':'UIT'}</button>
         <br>
         <button onclick="gameMode=(gameMode==='classic'?'creative':'classic'); window.openSettings();" style="width:400px; padding:25px; background:${gameMode==='creative'?'#f1c40f':'#333'}; color:white; font-family:Impact; font-size:30px; cursor:pointer; border:none; border-radius:20px;">MODE: ${gameMode.toUpperCase()}</button>
         <br><br>
@@ -192,26 +202,76 @@ window.openCheat = () => {
     if(c === "YEAHMAN") { geld += 500000; totaalVerdiend += 500000; window.updateUI(); }
 };
 
-window.save = () => { if(autoSaveOnd) localStorage.setItem('grassMasterSaveV2', JSON.stringify({ geld, totaalVerdiend, totaalGemaaid, totaalUpgrades, geclaimdeTrofeeën, grasWaarde, huidigeSnelheid, huidigMowerRadius, prijsRadius, prijsSnelheid, prijsWaarde, gpLevel, eventLevel, huidigeSkin, ontgrendeldeSkins, autoSaveOnd, gameMode })); };
-window.load = () => { const d = JSON.parse(localStorage.getItem('grassMasterSaveV2')); if(!d) return; Object.assign(window, d); geld=d.geld; totaalVerdiend=d.totaalVerdiend; totaalGemaaid=d.totaalGemaaid; geclaimdeTrofeeën=d.geclaimdeTrofeeën; ontgrendeldeSkins=d.ontgrendeldeSkins; huidigeSkin=d.huidigeSkin; autoSaveOnd=d.autoSaveOnd; };
+window.save = () => { 
+    if(autoSaveOnd) {
+        const data = { 
+            geld, totaalVerdiend, totaalGemaaid, totaalUpgrades, geclaimdeTrofeeën, 
+            grasWaarde, huidigeSnelheid, huidigMowerRadius, prijsRadius, prijsSnelheid, 
+            prijsWaarde, gpLevel, eventLevel, huidigeSkin, ontgrendeldeSkins, 
+            autoSaveOnd, gameMode 
+        };
+        localStorage.setItem('grassMasterSaveV2', JSON.stringify(data));
+        console.log("Game automatisch opgeslagen");
+    }
+};
 
-// --- 8. ENGINE LOOP ---
+window.load = () => { 
+    const d = JSON.parse(localStorage.getItem('grassMasterSaveV2')); 
+    if(!d) return; 
+    Object.assign(window, d); 
+    geld=d.geld; totaalVerdiend=d.totaalVerdiend; totaalGemaaid=d.totaalGemaaid; 
+    geclaimdeTrofeeën=d.geclaimdeTrofeeën; ontgrendeldeSkins=d.ontgrendeldeSkins; 
+    huidigeSkin=d.huidigeSkin; autoSaveOnd=d.autoSaveOnd; gameMode=d.gameMode;
+    gpLevel=d.gpLevel || 1; eventLevel=d.eventLevel || 1;
+};
+
+// --- 7. ENGINE LOOP ---
 const mower = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), new THREE.MeshStandardMaterial({color: 0xff0000}));
 scene.add(mower, new THREE.AmbientLight(0xffffff, 0.9));
 const light = new THREE.DirectionalLight(0xffffff, 1); light.position.set(5, 15, 5); scene.add(light);
 camera.position.set(0, 15, 15);
+
 const grassArr = [];
-for(let x=-25; x<25; x+=0.8) { for(let z=-25; z<25; z+=0.8) { const g = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.3), new THREE.MeshStandardMaterial({color: 0x2ecc71})); g.position.set(x,0,z); g.userData = {cut: 0}; scene.add(g); grassArr.push(g); } }
-window.onkeydown=(e)=>keys[e.key.toLowerCase()]=true; window.onkeyup=(e)=>keys[e.key.toLowerCase()]=false;
+for(let x=-25; x<25; x+=0.8) { 
+    for(let z=-25; z<25; z+=0.8) { 
+        const g = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.3), new THREE.MeshStandardMaterial({color: 0x2ecc71})); 
+        g.position.set(x,0,z); g.userData = {cut: 0}; scene.add(g); grassArr.push(g); 
+    } 
+}
+
+window.onkeydown=(e)=>keys[e.key.toLowerCase()]=true; 
+window.onkeyup=(e)=>keys[e.key.toLowerCase()]=false;
+
 function animate() {
     requestAnimationFrame(animate);
     let s = gameMode === "creative" ? creativeSpeed : huidigeSnelheid;
     if(keys['w']||keys['z']) mower.position.z -= s; if(keys['s']) mower.position.z += s;
     if(keys['a']||keys['q']) mower.position.x -= s; if(keys['d']) mower.position.x += s;
-    grassArr.forEach(g => { if(g.visible && mower.position.distanceTo(g.position) < huidigMowerRadius) { g.visible = false; g.userData.cut = Date.now(); if(gameMode === "classic") { geld += grasWaarde; totaalVerdiend += grasWaarde; } totaalGemaaid++; window.updateUI(); } if(!g.visible && Date.now() - g.userData.cut > regrowDelay) g.visible = true; });
-    camera.position.set(mower.position.x, 15, mower.position.z + 15); camera.lookAt(mower.position); renderer.render(scene, camera);
+    
+    grassArr.forEach(g => { 
+        if(g.visible && mower.position.distanceTo(g.position) < huidigMowerRadius) { 
+            g.visible = false; 
+            g.userData.cut = Date.now(); 
+            if(gameMode === "classic") { 
+                geld += grasWaarde; 
+                totaalVerdiend += grasWaarde; 
+            } 
+            totaalGemaaid++; 
+            window.updateUI(); 
+        } 
+        if(!g.visible && Date.now() - g.userData.cut > regrowDelay) g.visible = true; 
+    });
+    
+    camera.position.set(mower.position.x, 15, mower.position.z + 15); 
+    camera.lookAt(mower.position); 
+    renderer.render(scene, camera);
 }
+
+// --- 8. STARTUP ---
 setInterval(window.save, 5000);
-window.load(); window.genereerMissie(false); window.genereerMissie(true); window.updateUI();
+window.load(); 
+window.genereerMissie(false); 
+window.genereerMissie(true); 
+window.updateUI();
 mower.material.color.set(alleSkinKleuren[huidigeSkin] || 0xff0000);
 animate();
