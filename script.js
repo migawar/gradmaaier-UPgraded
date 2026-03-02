@@ -582,6 +582,7 @@ const buildChatUi = () => {
       window.sendChatMessage();
     }
   });
+  chatInputEl?.addEventListener("focus", () => clearMovementKeys());
   setChatInputState(Boolean(ingelogdeGebruiker));
   setChatOnlineCount(0);
   setChatStatus("Starten...", "#9ca3af");
@@ -2383,8 +2384,40 @@ for (let x = 0; x < grassPerSide; x++) {
 }
 grassMesh.instanceMatrix.needsUpdate = true;
 
-window.onkeydown = (e) => (keys[e.key.toLowerCase()] = true);
-window.onkeyup = (e) => (keys[e.key.toLowerCase()] = false);
+const CHAT_BLOKKEER_MOVE_KEYS = [
+  "w",
+  "a",
+  "s",
+  "d",
+  "q",
+  "z",
+  "arrowup",
+  "arrowdown",
+  "arrowleft",
+  "arrowright",
+];
+const isChatInputGefocust = () => document.activeElement === chatInputEl;
+const clearMovementKeys = () => {
+  for (const key of CHAT_BLOKKEER_MOVE_KEYS) {
+    keys[key] = false;
+  }
+};
+window.onkeydown = (e) => {
+  const key = e.key.toLowerCase();
+  if (isChatInputGefocust() && CHAT_BLOKKEER_MOVE_KEYS.includes(key)) {
+    keys[key] = false;
+    return;
+  }
+  keys[key] = true;
+};
+window.onkeyup = (e) => {
+  const key = e.key.toLowerCase();
+  if (isChatInputGefocust() && CHAT_BLOKKEER_MOVE_KEYS.includes(key)) {
+    keys[key] = false;
+    return;
+  }
+  keys[key] = false;
+};
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -2513,6 +2546,10 @@ function animate(nowPerf = performance.now()) {
   const frameDeltaMs = Math.max(0, Math.min(250, nowPerf - lastFrameTime));
   lastFrameTime = nowPerf;
   frameAccumulatorMs += frameDeltaMs;
+
+  if (isChatInputGefocust()) {
+    clearMovementKeys();
+  }
 
   if (frameAccumulatorMs < FRAME_INTERVAL_MS) return;
   frameAccumulatorMs %= FRAME_INTERVAL_MS;
