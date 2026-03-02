@@ -364,9 +364,18 @@ const setChatOpenState = (open) => {
   chatPanel.classList.toggle("has-unread", chatHeeftOngelezen && !open);
   if (open) chatHeeftOngelezen = false;
 };
+const stopChatSubscription = () => {
+  if (!chatUnsubscribe) return;
+  chatUnsubscribe();
+  chatUnsubscribe = null;
+};
 const subscribeChat = () => {
   if (!firebaseDb) return;
-  if (chatUnsubscribe) chatUnsubscribe();
+  stopChatSubscription();
+  if (!ingelogdeGebruiker) {
+    setChatStatus("Log in met Google", "#f59e0b");
+    return;
+  }
   setChatStatus("Verbinden...", "#9ca3af");
   const chatQuery = query(
     collection(firebaseDb, FIREBASE_CHAT_COLLECTION),
@@ -388,7 +397,13 @@ const subscribeChat = () => {
     },
     (err) => {
       console.error("Chat stream fout:", err);
-      setChatStatus("Geen verbinding", "#f87171");
+      if (err?.code === "permission-denied") {
+        setChatStatus("Geen toegang tot chat", "#f87171");
+      } else if (err?.code === "unavailable") {
+        setChatStatus("Chat server offline", "#f87171");
+      } else {
+        setChatStatus("Geen verbinding", "#f87171");
+      }
     },
   );
 };
@@ -463,6 +478,7 @@ const buildChatUi = () => {
 const refreshChatForAuthState = () => {
   setChatInputState(Boolean(ingelogdeGebruiker));
   if (!ingelogdeGebruiker) {
+    stopChatSubscription();
     setChatStatus("Log in met Google", "#f59e0b");
   }
 };
@@ -1757,8 +1773,8 @@ window.initFirebase = () => {
       }
       if (document.getElementById("settingsPanel")) window.openSettings();
       refreshChatForAuthState();
+      subscribeChat();
     });
-    subscribeChat();
   } catch (err) {
     console.error("Firebase init mislukt:", err);
     setChatStatus("Firebase fout", "#f87171");
