@@ -63,7 +63,7 @@ let trofeeen = 0,
 const BASE_GRASS_VALUE = 0.003;
 const VALUE_UPGRADE_STEP = 0.000162;
 const EARN_MULTIPLIER = 0.3;
-const REBIRT_BONUS_STEP = 1.01;
+const REBIRT_BONUS_STEP = 1.05;
 const REBIRT_KOST_DIAMANT = 1;
 const BASE_SPEED = 0.07;
 const BASE_TURN_SPEED = 0.045;
@@ -1361,7 +1361,7 @@ window.openShop = () => {
         <p style="font-size:26px; margin:10px 0 25px 0;">Diamanten: <span style="color:#85c1e9;">${diamanten}</span></p>
         <div style="width:100%; padding:14px; background:#1f2937; color:#93c5fd; border:3px solid #334155; border-radius:14px; font-family:Impact; font-size:22px; margin-bottom:12px;">DIAMANTEN KRIJG JE VIA GRASS PASS</div>
         <div style="margin-top:16px; padding:14px; background:#1f2d1f; border:3px solid #2ecc71; border-radius:14px;">
-          <button onclick="window.koopRebirt()" style="width:100%; padding:16px; background:${diamanten >= REBIRT_KOST_DIAMANT ? "#2ecc71" : "#555"}; color:white; border:3px solid white; border-radius:12px; cursor:${diamanten >= REBIRT_KOST_DIAMANT ? "pointer" : "default"}; font-family:Impact; font-size:24px;">REBIRT (+1% | ${REBIRT_KOST_DIAMANT}D)</button>
+          <button onclick="window.koopRebirt()" style="width:100%; padding:16px; background:${diamanten >= REBIRT_KOST_DIAMANT ? "#2ecc71" : "#555"}; color:white; border:3px solid white; border-radius:12px; cursor:${diamanten >= REBIRT_KOST_DIAMANT ? "pointer" : "default"}; font-family:Impact; font-size:24px;">REBIRT (+5% | ${REBIRT_KOST_DIAMANT}D)</button>
           <p style="font-size:18px; color:#c8f7c5; margin:10px 0 0 0;">Reset enkel upgrades. Huidig: x${verdienMultiplier.toFixed(2)} | Na rebirt: x${volgendeRebirtMulti}</p>
         </div>
         <div style="margin-top:22px; padding:16px; background:#2d1f3a; border:3px solid #8e44ad; border-radius:14px;">
