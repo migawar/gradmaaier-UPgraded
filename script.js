@@ -213,10 +213,11 @@ let actieveOpdracht = null,
   eventOpdracht = null;
 let rewardKlaar = false,
   eventRewardKlaar = false;
-let huidigeSkin = "RED",
-  ontgrendeldeSkins = ["RED"];
+let huidigeSkin = "STARTER",
+  ontgrendeldeSkins = ["STARTER"];
 
 const alleSkinKleuren = {
+  STARTER: 0x3f8f2f,
   RED: 0xff0000,
   BLUE: 0x0000ff,
   JANUARI: 0xffffff,
@@ -878,9 +879,10 @@ window.setCreativeSpeed = (value) => {
 window.applySkinVisual = (skinNaam) => {
   if (!mowerBodyMaterial) return;
   const basisKleur = alleSkinKleuren[skinNaam] ?? 0xff0000;
+  const isStarter = skinNaam === "STARTER";
   const isRed = skinNaam === "RED";
   const isBlue = skinNaam === "BLUE";
-  const isOmgekeerd = !isRed && !isBlue;
+  const isOmgekeerd = !isStarter && !isRed && !isBlue;
   const override = skinVisualOverrides[skinNaam] || {};
 
   const color = override.color ?? basisKleur;
@@ -1594,7 +1596,7 @@ window.openSkins = () => {
   overlay.style.left = "0";
   overlay.style.pointerEvents = "auto";
   let h = `<div style="background:#111; padding:40px; border:8px solid #3498db; border-radius:30px; text-align:center; max-width:80%; max-height:80vh; overflow-y:auto;"><h1 style="color:#3498db; font-size:50px; margin-bottom:20px;"> SKINS</h1><div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:15px;">`;
-  ["RED", "BLUE", ...maanden].forEach((s) => {
+  ["STARTER", "RED", "BLUE", ...maanden].forEach((s) => {
     const ok = gameMode === "creative" || ontgrendeldeSkins.includes(s),
       cur = huidigeSkin === s;
     h += `<button class="skinSelectBtn" data-skin="${s}" data-unlocked="${ok ? "1" : "0"}" style="padding:20px; background:${ok ? (cur ? "#2ecc71" : "#333") : "#111"}; color:${ok ? "white" : "#555"}; font-family:Impact; border:${cur ? "4px solid white" : "2px solid #444"}; border-radius:15px; cursor:${ok ? "pointer" : "default"}; font-size:18px;" ${ok ? "" : "disabled"}>${ok ? s : "LOCKED"}</button>`;
@@ -1788,12 +1790,15 @@ window.applySaveData = (d) => {
   grasWaarde = BASE_GRASS_VALUE + countWaarde * VALUE_UPGRADE_STEP;
   gpLevel = Number.isFinite(d.gpLevel) ? d.gpLevel : 1;
   eventLevel = Number.isFinite(d.eventLevel) ? d.eventLevel : 1;
-  huidigeSkin = d.huidigeSkin || "RED";
+  huidigeSkin = d.huidigeSkin || "STARTER";
+  if (huidigeSkin === "RED") huidigeSkin = "STARTER";
   ontgrendeldeSkins = Array.isArray(d.ontgrendeldeSkins)
     ? [...new Set(d.ontgrendeldeSkins.map((skin) => String(skin).toUpperCase()))]
-    : ["RED"];
-  if (!ontgrendeldeSkins.includes("RED")) ontgrendeldeSkins.unshift("RED");
-  if (!ontgrendeldeSkins.includes(huidigeSkin)) huidigeSkin = "RED";
+    : ["STARTER"];
+  if (ontgrendeldeSkins.includes("RED") && !ontgrendeldeSkins.includes("STARTER"))
+    ontgrendeldeSkins.unshift("STARTER");
+  if (!ontgrendeldeSkins.includes("STARTER")) ontgrendeldeSkins.unshift("STARTER");
+  if (!ontgrendeldeSkins.includes(huidigeSkin)) huidigeSkin = "STARTER";
   eventMaandKey =
     typeof d.eventMaandKey === "string" && /^\d{4}-\d{2}$/.test(d.eventMaandKey)
       ? d.eventMaandKey
