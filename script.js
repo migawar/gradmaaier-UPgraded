@@ -238,6 +238,7 @@ const PVP_MODES = [
   { id: "MOST_DISTANCE", naam: "MEEST AFSTAND" },
   { id: "DUEL_GRASS", naam: "DUEL 1V1" },
 ];
+const DUEL_INVITE_MAX_AGE_MS = 2 * 60 * 1000;
 const REMOTE_TRAIL_POINT_DISTANCE = 0.55;
 const REMOTE_TRAIL_MAX_POINTS = 64;
 const PLAYER_COLLISION_RADIUS = 0.58;
@@ -516,6 +517,18 @@ const getPvpScoreDocRef = (serverId, uid) =>
   );
 const getDuelInviteDocRef = (inviteId) =>
   doc(firebaseDb, FIREBASE_DUEL_INVITES_COLLECTION, String(inviteId || ""));
+const getPvpLobbyPayloadFromSave = (data) => ({
+  serverId: normalizeServerId(data?.pvpLobbyServerId),
+  gameId: String(data?.pvpLobbyGameId || ""),
+  mode: String(data?.pvpLobbyMode || "MOST_GRASS"),
+  status: String(data?.pvpLobbyStatus || "idle"),
+  hostUid: String(data?.pvpLobbyHostUid || ""),
+  allowedUids: Array.isArray(data?.pvpLobbyAllowedUids)
+    ? data.pvpLobbyAllowedUids.map((uid) => String(uid || ""))
+    : [],
+  endsAtMs: Number(data?.pvpLobbyEndsAtMs) || 0,
+  updatedAtMs: Number(data?.pvpLobbyUpdatedAtMs) || 0,
+});
 const escapeHtml = (value) =>
   String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -2037,11 +2050,12 @@ const tryMarkPvpEnded = async () => {
   pvpState.endSent = true;
   try {
     await setDoc(
-      getPvpLobbyDocRef(pvpState.serverId),
+      getSaveDocRef(ingelogdeGebruiker.uid),
       {
-        status: "ended",
-        gameId: pvpState.gameId,
-        serverId: pvpState.serverId,
+        pvpLobbyStatus: "ended",
+        pvpLobbyGameId: pvpState.gameId,
+        pvpLobbyServerId: pvpState.serverId,
+        pvpLobbyUpdatedAtMs: Date.now(),
         updatedAt: serverTimestamp(),
       },
       { merge: true },
@@ -2058,14 +2072,15 @@ const publishPvpScore = async () => {
   if (pvpState.allowedUids.length && !pvpState.allowedUids.includes(selfUid)) return;
   try {
     await setDoc(
-      getPvpScoreDocRef(pvpState.serverId, ingelogdeGebruiker.uid),
+      getSaveDocRef(ingelogdeGebruiker.uid),
       {
-        uid: selfUid,
-        displayName: getChatDisplayName(),
-        serverId: pvpState.serverId,
-        gameId: pvpState.gameId,
-        mode: pvpState.mode,
-        score: Number(pvpState.score) || 0,
+        pvpScoreUid: selfUid,
+        pvpScoreDisplayName: getChatDisplayName(),
+        pvpScoreServerId: pvpState.serverId,
+        pvpScoreGameId: pvpState.gameId,
+        pvpScoreMode: pvpState.mode,
+        pvpScoreValue: Number(pvpState.score) || 0,
+        pvpScoreUpdatedAtMs: Date.now(),
         updatedAt: serverTimestamp(),
       },
       { merge: true },
@@ -2084,9 +2099,9 @@ const subscribePvpScores = () => {
   stopPvpScoreSubscription();
   if (!firebaseDb || !ingelogdeGebruiker || !pvpState.active || !pvpState.gameId) return;
   const scoreQuery = query(
-    collection(firebaseDb, FIREBASE_PVP_SCORE_COLLECTION),
-    orderBy("updatedAt", "desc"),
-    limit(250),
+    collection(firebaseDb, FIREBASE_SAVE_COLLECTION),
+    where("multiplayerServerId", "==", normalizeServerId(pvpState.serverId)),
+    limit(500),
   );
   pvpScoreUnsubscribe = onSnapshot(
     scoreQuery,
@@ -2094,17 +2109,20 @@ const subscribePvpScores = () => {
       const perUid = new Map();
       snapshot.forEach((docSnap) => {
         const data = docSnap.data() || {};
-        if (normalizeServerId(data.serverId) !== pvpState.serverId) return;
-        if (String(data.gameId || "") !== pvpState.gameId) return;
-        const uid = String(data.uid || docSnap.id);
+        if (normalizeServerId(data.pvpScoreServerId) !== pvpState.serverId) return;
+        if (String(data.pvpScoreGameId || "") !== pvpState.gameId) return;
+        const uid = String(data.pvpScoreUid || docSnap.id);
         if (pvpState.allowedUids.length && !pvpState.allowedUids.includes(uid)) return;
-        const score = Number(data.score);
+        const score = Number(data.pvpScoreValue);
         if (!uid || !Number.isFinite(score)) return;
         const bestaand = perUid.get(uid);
         if (bestaand && bestaand.score >= score) return;
         perUid.set(uid, {
           uid,
-          naam: String(data.displayName || "SPELER").slice(0, 24),
+          naam: String(data.pvpScoreDisplayName || getLeaderboardDisplayName(data, uid)).slice(
+            0,
+            24,
+          ),
           score: Math.max(0, score),
         });
       });
@@ -2170,23 +2188,33 @@ const subscribePvpLobby = () => {
     stopPvpSync();
     return;
   }
+  const lobbyQuery = query(
+    collection(firebaseDb, FIREBASE_SAVE_COLLECTION),
+    where("multiplayerServerId", "==", normalizeServerId(multiplayerServerId)),
+    limit(500),
+  );
   pvpLobbyUnsubscribe = onSnapshot(
-    getPvpLobbyDocRef(multiplayerServerId),
-    (snap) => applyPvpLobbyData(snap.exists() ? snap.data() : null),
+    lobbyQuery,
+    (snapshot) => {
+      let besteLobby = null;
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() || {};
+        const lobby = getPvpLobbyPayloadFromSave(data);
+        if (!lobby.gameId || lobby.status !== "running") return;
+        if (lobby.serverId !== normalizeServerId(multiplayerServerId)) return;
+        if (!besteLobby || lobby.updatedAtMs > besteLobby.updatedAtMs) {
+          besteLobby = lobby;
+        }
+      });
+      applyPvpLobbyData(besteLobby);
+    },
     (err) => console.error("PVP lobby stream fout:", err),
   );
 };
 const markDuelInvite = async (inviteId, status) => {
-  if (!firebaseDb || !inviteId) return;
-  try {
-    await setDoc(
-      getDuelInviteDocRef(inviteId),
-      { status: String(status || "handled"), handledAt: serverTimestamp() },
-      { merge: true },
-    );
-  } catch (err) {
-    console.error("Duel invite status mislukt:", err);
-  }
+  // Bij rules met write-only eigen save kunnen we invites van anderen niet aanpassen.
+  // Daarom lokaal dedupliceren en geen externe invite status schrijven.
+  return status ? inviteId : null;
 };
 const startDuelFromInvite = async (invite) => {
   if (!firebaseDb || !ingelogdeGebruiker || !invite) return;
@@ -2197,17 +2225,18 @@ const startDuelFromInvite = async (invite) => {
   const endAtMs = Date.now() + PVP_DURATION_MS;
   try {
     await setDoc(
-      getPvpLobbyDocRef(multiplayerServerId),
+      getSaveDocRef(ingelogdeGebruiker.uid),
       {
-        serverId: normalizeServerId(multiplayerServerId),
-        gameId,
-        mode: "DUEL_GRASS",
-        status: "running",
-        hostUid: selfUid,
-        allowedUids: [selfUid, fromUid],
-        endsAtMs: endAtMs,
-        speed: PVP_FORCE_SPEED,
-        radius: PVP_FORCE_RADIUS,
+        pvpLobbyServerId: normalizeServerId(multiplayerServerId),
+        pvpLobbyGameId: gameId,
+        pvpLobbyMode: "DUEL_GRASS",
+        pvpLobbyStatus: "running",
+        pvpLobbyHostUid: selfUid,
+        pvpLobbyAllowedUids: [selfUid, fromUid],
+        pvpLobbyEndsAtMs: endAtMs,
+        pvpLobbySpeed: PVP_FORCE_SPEED,
+        pvpLobbyRadius: PVP_FORCE_RADIUS,
+        pvpLobbyUpdatedAtMs: Date.now(),
         updatedAt: serverTimestamp(),
       },
       { merge: true },
@@ -2221,21 +2250,32 @@ const subscribeDuelInvites = () => {
   stopDuelInviteSubscription();
   if (!firebaseDb || !ingelogdeGebruiker) return;
   const inviteQuery = query(
-    collection(firebaseDb, FIREBASE_DUEL_INVITES_COLLECTION),
-    where("toUid", "==", String(ingelogdeGebruiker.uid || "")),
-    limit(20),
+    collection(firebaseDb, FIREBASE_SAVE_COLLECTION),
+    where("multiplayerServerId", "==", normalizeServerId(multiplayerServerId)),
+    limit(500),
   );
   duelInviteUnsubscribe = onSnapshot(
     inviteQuery,
     async (snapshot) => {
+      const selfUid = String(ingelogdeGebruiker.uid || "");
       const pending = snapshot.docs
-        .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }))
-        .filter((invite) => String(invite.status || "pending") === "pending")
-        .filter(
-          (invite) =>
-            normalizeServerId(invite.serverId) === normalizeServerId(multiplayerServerId),
-        )
-        .sort((a, b) => Number(b.createdAtMs || 0) - Number(a.createdAtMs || 0));
+        .map((docSnap) => {
+          const data = docSnap.data() || {};
+          return {
+            id: String(data.duelInviteId || ""),
+            fromUid: String(data.duelInviteFromUid || docSnap.id),
+            fromName: String(data.duelInviteFromName || getLeaderboardDisplayName(data, docSnap.id)),
+            toUid: String(data.duelInviteToUid || ""),
+            serverId: normalizeServerId(data.duelInviteServerId),
+            status: String(data.duelInviteStatus || "none"),
+            createdAtMs: Number(data.duelInviteCreatedAtMs) || 0,
+          };
+        })
+        .filter((invite) => invite.id && invite.status === "pending")
+        .filter((invite) => invite.toUid === selfUid)
+        .filter((invite) => invite.serverId === normalizeServerId(multiplayerServerId))
+        .filter((invite) => Date.now() - invite.createdAtMs <= DUEL_INVITE_MAX_AGE_MS)
+        .sort((a, b) => b.createdAtMs - a.createdAtMs);
       const invite = pending[0];
       if (!invite || invite.id === laatsteDuelInviteId) return;
       laatsteDuelInviteId = invite.id;
@@ -2261,16 +2301,21 @@ window.inviteDuel = async (targetUid, targetName = "SPELER") => {
   const fromUid = String(ingelogdeGebruiker.uid || "");
   if (!toUid || toUid === fromUid) return;
   try {
-    await addDoc(collection(firebaseDb, FIREBASE_DUEL_INVITES_COLLECTION), {
-      fromUid,
-      fromName: getChatDisplayName(),
-      toUid,
-      toName: naam.slice(0, 24),
-      serverId: normalizeServerId(multiplayerServerId),
-      status: "pending",
-      createdAt: serverTimestamp(),
-      createdAtMs: Date.now(),
-    });
+    await setDoc(
+      getSaveDocRef(ingelogdeGebruiker.uid),
+      {
+        duelInviteId: `${Date.now()}_${fromUid.slice(0, 8)}_${toUid.slice(0, 8)}`,
+        duelInviteFromUid: fromUid,
+        duelInviteFromName: getChatDisplayName(),
+        duelInviteToUid: toUid,
+        duelInviteToName: naam.slice(0, 24),
+        duelInviteServerId: normalizeServerId(multiplayerServerId),
+        duelInviteStatus: "pending",
+        duelInviteCreatedAtMs: Date.now(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
     alert(`Duel-uitnodiging verstuurd naar ${naam}.`);
   } catch (err) {
     console.error("Duel invite versturen mislukt:", err);
@@ -2355,17 +2400,18 @@ window.startPvpMiniGame = async (modeId) => {
   const endAtMs = Date.now() + PVP_DURATION_MS;
   try {
     await setDoc(
-      getPvpLobbyDocRef(multiplayerServerId),
+      getSaveDocRef(ingelogdeGebruiker.uid),
       {
-        serverId: normalizeServerId(multiplayerServerId),
-        gameId,
-        mode: mode.id,
-        status: "running",
-        hostUid: String(ingelogdeGebruiker.uid || ""),
-        allowedUids: [],
-        endsAtMs: endAtMs,
-        speed: PVP_FORCE_SPEED,
-        radius: PVP_FORCE_RADIUS,
+        pvpLobbyServerId: normalizeServerId(multiplayerServerId),
+        pvpLobbyGameId: gameId,
+        pvpLobbyMode: mode.id,
+        pvpLobbyStatus: "running",
+        pvpLobbyHostUid: String(ingelogdeGebruiker.uid || ""),
+        pvpLobbyAllowedUids: [],
+        pvpLobbyEndsAtMs: endAtMs,
+        pvpLobbySpeed: PVP_FORCE_SPEED,
+        pvpLobbyRadius: PVP_FORCE_RADIUS,
+        pvpLobbyUpdatedAtMs: Date.now(),
         updatedAt: serverTimestamp(),
       },
       { merge: true },
