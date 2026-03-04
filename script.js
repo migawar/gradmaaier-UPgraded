@@ -129,6 +129,12 @@ const CHAT_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 const CHAT_CLEANUP_BATCH_SIZE = 100;
 const ONLINE_SPELER_WINDOW_MS = 45 * 1000;
 const ONLINE_SPELER_REFRESH_MS = 20 * 1000;
+const MULTIPLAYER_DEFAULT_SERVER = "EU-1";
+const MULTIPLAYER_SERVERS = [
+  { id: "EU-1", naam: "EUROPE #1", regio: "Europa", accent: "#60a5fa" },
+  { id: "US-1", naam: "AMERICA #1", regio: "Verenigde Staten", accent: "#f59e0b" },
+  { id: "ASIA-1", naam: "ASIA #1", regio: "Azie", accent: "#34d399" },
+];
 const TROFEE_DREMPELS = [
   100,
   1000,
@@ -183,6 +189,7 @@ let chatCleanupIntervalId = null;
 let chatOnlinePollIntervalId = null;
 let chatCleanupBusy = false;
 let chatOnlineBusy = false;
+let multiplayerServerId = MULTIPLAYER_DEFAULT_SERVER;
 
 const maanden = [
   "JANUARI",
@@ -349,6 +356,23 @@ const getLeaderboardDisplayName = (data, fallbackId = "") => {
   }
   return fallbackId ? `SPELER ${String(fallbackId).slice(0, 8)}` : "ONBEKEND";
 };
+const normalizeServerId = (rawId) => {
+  const id = String(rawId ?? "").trim().toUpperCase();
+  return MULTIPLAYER_SERVERS.some((server) => server.id === id)
+    ? id
+    : MULTIPLAYER_DEFAULT_SERVER;
+};
+const getServerById = (serverId) =>
+  MULTIPLAYER_SERVERS.find((server) => server.id === normalizeServerId(serverId)) ||
+  MULTIPLAYER_SERVERS[0];
+const formatPlaytime = (seconds) => {
+  const s = Math.max(0, Math.floor(Number(seconds) || 0));
+  const uren = Math.floor(s / 3600);
+  const minuten = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = (v) => String(v).padStart(2, "0");
+  return `${pad(uren)}:${pad(minuten)}:${pad(sec)}`;
+};
 const getAccountLabel = () => {
   if (!ingelogdeGebruiker) return "NIET INGELOGD";
   if (ingelogdeGebruiker.displayName) return ingelogdeGebruiker.displayName;
@@ -473,13 +497,21 @@ const refreshOnlineSpelers = async () => {
   chatOnlineBusy = true;
   try {
     const cutoff = Timestamp.fromMillis(Date.now() - ONLINE_SPELER_WINDOW_MS);
+    const actieveServerId = normalizeServerId(multiplayerServerId);
     const onlineQuery = query(
       collection(firebaseDb, FIREBASE_SAVE_COLLECTION),
       where("updatedAt", ">=", cutoff),
       limit(2000),
     );
     const onlineSnap = await getDocs(onlineQuery);
-    setChatOnlineCount(onlineSnap.size);
+    let onlineInServer = 0;
+    onlineSnap.forEach((docSnap) => {
+      const data = docSnap.data() || {};
+      if (normalizeServerId(data.multiplayerServerId) === actieveServerId) {
+        onlineInServer++;
+      }
+    });
+    setChatOnlineCount(onlineInServer);
   } catch (err) {
     if (err?.code !== "permission-denied") {
       console.error("Online spelers ophalen mislukt:", err);
@@ -509,6 +541,7 @@ const subscribeChat = () => {
     return;
   }
   setChatStatus("Verbinden...", "#9ca3af");
+  const chatServerId = normalizeServerId(multiplayerServerId);
   const chatQuery = query(
     collection(firebaseDb, FIREBASE_CHAT_COLLECTION),
     orderBy("createdAt", "desc"),
@@ -523,6 +556,8 @@ const subscribeChat = () => {
         .filter((d) => {
           const data = d.data();
           if (!data?.createdAt || typeof data.createdAt.toDate !== "function") return false;
+          const berichtServerId = normalizeServerId(data.serverId);
+          if (berichtServerId !== chatServerId) return false;
           const isNieuwGenoeg = data.createdAt.toDate().getTime() >= cutoffMs;
           if (!isNieuwGenoeg) teVerwijderen.push(d.ref);
           return isNieuwGenoeg;
@@ -543,7 +578,7 @@ const subscribeChat = () => {
         chatHeeftOngelezen = true;
       }
       chatPanel?.classList.toggle("has-unread", chatHeeftOngelezen && !chatIsOpen);
-      setChatStatus("Live", "#22c55e");
+      setChatStatus(`Live op ${chatServerId}`, "#22c55e");
     },
     (err) => {
       console.error("Chat stream fout:", err);
@@ -575,6 +610,7 @@ window.sendChatMessage = async () => {
       text: safeText,
       displayName: getChatDisplayName(),
       uid: String(ingelogdeGebruiker.uid || ""),
+      serverId: normalizeServerId(multiplayerServerId),
       createdAt: serverTimestamp(),
     });
     chatInputEl.value = "";
@@ -799,12 +835,15 @@ window.updateUI = () => {
           <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:8px;">
             <button id="trofeePadBtn" style="background:#f39c12; color:white; border:2px solid white; padding:5px 15px; border-radius:8px; cursor:pointer; font-family:Impact; font-size:18px;">TROFEEENPAD</button>
             <button id="leaderboardBtn" style="background:#2980b9; color:white; border:2px solid white; padding:5px 15px; border-radius:8px; cursor:pointer; font-family:Impact; font-size:18px;">LEADERBOARD</button>
+            <button id="serversBtn" style="background:#8b5cf6; color:white; border:2px solid white; padding:5px 15px; border-radius:8px; cursor:pointer; font-family:Impact; font-size:18px;">SERVERS</button>
           </div>`;
     document.getElementById("miniGameSlot").innerHTML = miniGameBtnHtml;
     const trofeePadBtn = document.getElementById("trofeePadBtn");
     if (trofeePadBtn) trofeePadBtn.onclick = () => window.openTrofee();
     const leaderboardBtn = document.getElementById("leaderboardBtn");
     if (leaderboardBtn) leaderboardBtn.onclick = () => window.openLeaderboard();
+    const serversBtn = document.getElementById("serversBtn");
+    if (serversBtn) serversBtn.onclick = () => window.openMultiplayerServers();
     const miniGameBtn = document.getElementById("miniGameBtn");
     if (miniGameBtn) miniGameBtn.onclick = () => window.openMiniGame();
   } else {
@@ -944,6 +983,7 @@ window.maakBasicSnapshot = () => ({
   ontgrendeldeSkins: [...ontgrendeldeSkins],
   shopUpgradeLevel,
   shopUpgradePrijs,
+  multiplayerServerId,
   rebirtCount,
   verdienMultiplier,
   radDraaiCount,
@@ -989,6 +1029,7 @@ window.herstelBasicSnapshot = (snapshot) => {
   ontgrendeldeSkins = [...snapshot.ontgrendeldeSkins];
   shopUpgradeLevel = snapshot.shopUpgradeLevel;
   shopUpgradePrijs = SHOP_UPGRADE_VASTE_KOST;
+  multiplayerServerId = normalizeServerId(snapshot.multiplayerServerId);
   rebirtCount = Number.isFinite(snapshot.rebirtCount) ? snapshot.rebirtCount : 0;
   shopUpgradeLevel = 0;
   verdienMultiplier = Math.pow(REBIRT_BONUS_STEP, rebirtCount);
@@ -1159,7 +1200,7 @@ window.openLeaderboard = async () => {
   try {
     const leaderboardQuery = query(
       collection(firebaseDb, FIREBASE_SAVE_COLLECTION),
-      orderBy("totaalVerdiend", "desc"),
+      orderBy("updatedAt", "desc"),
       limit(1000),
     );
     const snap = await getDocs(leaderboardQuery);
@@ -1170,59 +1211,89 @@ window.openLeaderboard = async () => {
         typeof data.accountEmail === "string" ? data.accountEmail.trim() : "";
       if (!email || !email.includes("@")) return;
       const verdiend = Number(data.totaalVerdiend);
-      if (!Number.isFinite(verdiend) || verdiend <= 0) return;
+      const speeltijd = Number(data.totaalSpeeltijdSec);
+      const safeVerdiend = Number.isFinite(verdiend) ? Math.max(0, verdiend) : 0;
+      const safeSpeeltijd = Number.isFinite(speeltijd) ? Math.max(0, speeltijd) : 0;
+      if (safeVerdiend <= 0 && safeSpeeltijd <= 0) return;
       spelers.push({
         uid: docSnap.id,
         naam: getLeaderboardDisplayName(data, docSnap.id),
-        totaalVerdiend: verdiend,
+        totaalVerdiend: safeVerdiend,
+        totaalSpeeltijdSec: safeSpeeltijd,
       });
     });
-    spelers.sort((a, b) => b.totaalVerdiend - a.totaalVerdiend);
-    const topTien = spelers.slice(0, 10);
     const mijnUid = ingelogdeGebruiker?.uid ? String(ingelogdeGebruiker.uid) : "";
-    const mijnIndex = mijnUid ? spelers.findIndex((speler) => speler.uid === mijnUid) : -1;
-    const mijnPositie =
-      mijnIndex >= 0
-        ? {
-            plaats: mijnIndex + 1,
-            naam: spelers[mijnIndex].naam,
-            totaalVerdiend: spelers[mijnIndex].totaalVerdiend,
-          }
-        : null;
-    const toonMijnPositie = Boolean(mijnPositie && mijnPositie.plaats > 10);
-    const lijstHtml = topTien.length
-      ? topTien
-          .map(
-            (speler, index) => `<div style="display:grid; grid-template-columns:110px 1fr 240px; gap:10px; align-items:center; text-align:left; padding:14px; margin:8px 0; border-radius:12px; background:${index < 3 ? "#1b2631" : "#1f2937"}; border:2px solid ${index < 3 ? "#f1c40f" : "#334155"};">
-              <div style="font-size:24px; color:${index < 3 ? "#f1c40f" : "#93c5fd"};">#${index + 1}</div>
-              <div style="font-size:22px; color:white; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(speler.naam)}</div>
-              <div style="font-size:22px; color:#2ecc71; text-align:right;">$${speler.totaalVerdiend.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-            </div>`,
-          )
-          .join("")
-      : `<div style="font-size:24px; color:#bdc3c7; margin:20px 0;">Nog geen Google-spelers met verdiende inkomsten gevonden.</div>`;
-    const mijnPositieHtml = toonMijnPositie
-      ? `<div style="margin-top:14px; padding-top:14px; border-top:2px dashed #3b4b63;">
-          <div style="font-size:20px; color:#95a5a6; margin-bottom:8px; text-align:left;">JOUW POSITIE</div>
-          <div style="display:grid; grid-template-columns:110px 1fr 240px; gap:10px; align-items:center; text-align:left; padding:14px; margin:8px 0; border-radius:12px; background:#102a43; border:2px solid #4fc3f7;">
-            <div style="font-size:24px; color:#4fc3f7;">#${mijnPositie.plaats}</div>
-            <div style="font-size:22px; color:white; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(mijnPositie.naam)}</div>
-            <div style="font-size:22px; color:#2ecc71; text-align:right;">$${mijnPositie.totaalVerdiend.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+    let leaderboardMode = "money";
+    const renderLeaderboard = () => {
+      const opSpeelwijze =
+        leaderboardMode === "time"
+          ? (a, b) => b.totaalSpeeltijdSec - a.totaalSpeeltijdSec
+          : (a, b) => b.totaalVerdiend - a.totaalVerdiend;
+      const gesorteerd = [...spelers].sort(opSpeelwijze);
+      const topTien = gesorteerd.slice(0, 10);
+      const mijnIndex = mijnUid
+        ? gesorteerd.findIndex((speler) => speler.uid === mijnUid)
+        : -1;
+      const mijnPositie = mijnIndex >= 0 ? gesorteerd[mijnIndex] : null;
+      const toonMijnPositie = Boolean(mijnPositie && mijnIndex + 1 > 10);
+      const titelWaarde =
+        leaderboardMode === "time" ? "SPEELTIJD" : "TOTAAL VERDIEND";
+      const waardeHtml = (speler) =>
+        leaderboardMode === "time"
+          ? formatPlaytime(speler.totaalSpeeltijdSec)
+          : `$${speler.totaalVerdiend.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+      const waardeKleur = leaderboardMode === "time" ? "#fbbf24" : "#2ecc71";
+      const lijstHtml = topTien.length
+        ? topTien
+            .map(
+              (speler, index) => `<div style="display:grid; grid-template-columns:110px 1fr 240px; gap:10px; align-items:center; text-align:left; padding:14px; margin:8px 0; border-radius:12px; background:${index < 3 ? "#1b2631" : "#1f2937"}; border:2px solid ${index < 3 ? "#f1c40f" : "#334155"};">
+                <div style="font-size:24px; color:${index < 3 ? "#f1c40f" : "#93c5fd"};">#${index + 1}</div>
+                <div style="font-size:22px; color:white; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(speler.naam)}</div>
+                <div style="font-size:22px; color:${waardeKleur}; text-align:right;">${waardeHtml(speler)}</div>
+              </div>`,
+            )
+            .join("")
+        : `<div style="font-size:24px; color:#bdc3c7; margin:20px 0;">Nog geen spelers met leaderboard-data gevonden.</div>`;
+      const mijnPositieHtml = toonMijnPositie
+        ? `<div style="margin-top:14px; padding-top:14px; border-top:2px dashed #3b4b63;">
+            <div style="font-size:20px; color:#95a5a6; margin-bottom:8px; text-align:left;">JOUW POSITIE</div>
+            <div style="display:grid; grid-template-columns:110px 1fr 240px; gap:10px; align-items:center; text-align:left; padding:14px; margin:8px 0; border-radius:12px; background:#102a43; border:2px solid #4fc3f7;">
+              <div style="font-size:24px; color:#4fc3f7;">#${mijnIndex + 1}</div>
+              <div style="font-size:22px; color:white; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(mijnPositie.naam)}</div>
+              <div style="font-size:22px; color:${waardeKleur}; text-align:right;">${waardeHtml(mijnPositie)}</div>
+            </div>
+          </div>`
+        : "";
+      overlay.innerHTML = `<div style="background:#111; padding:40px; border:8px solid #2980b9; border-radius:30px; text-align:center; min-width:640px; max-width:900px; max-height:85vh; overflow-y:auto;">
+          <h1 style="color:#5dade2; font-size:55px; margin-bottom:8px;">LEADERBOARD</h1>
+          <p style="margin-bottom:14px; color:#d6eaf8;">Top 10 spelers (Google login)</p>
+          <div style="display:flex; gap:10px; justify-content:center; margin-bottom:14px;">
+            <button id="lbMoneyBtn" style="padding:10px 20px; border:none; border-radius:10px; font-family:Impact; font-size:20px; cursor:pointer; background:${leaderboardMode === "money" ? "#2ecc71" : "#374151"}; color:white;">TOTAAL VERDIEND</button>
+            <button id="lbTimeBtn" style="padding:10px 20px; border:none; border-radius:10px; font-family:Impact; font-size:20px; cursor:pointer; background:${leaderboardMode === "time" ? "#f59e0b" : "#374151"}; color:white;">SPEELTIJD</button>
           </div>
-        </div>`
-      : "";
-    overlay.innerHTML = `<div style="background:#111; padding:40px; border:8px solid #2980b9; border-radius:30px; text-align:center; min-width:640px; max-width:900px; max-height:85vh; overflow-y:auto;">
-        <h1 style="color:#5dade2; font-size:55px; margin-bottom:8px;">LEADERBOARD</h1>
-        <p style="margin-bottom:18px; color:#d6eaf8;">Top 10 spelers op basis van totaal verdiend (Google login)</p>
-        <div style="display:grid; grid-template-columns:110px 1fr 240px; gap:10px; font-size:20px; color:#95a5a6; border-bottom:2px solid #34495e; padding-bottom:8px; margin-bottom:10px;">
-          <div>PLAATS</div>
-          <div>NAAM</div>
-          <div style="text-align:right;">TOTAAL VERDIEND</div>
-        </div>
-        ${lijstHtml}
-        ${mijnPositieHtml}
-        <button onclick="window.sluit()" style="margin-top:18px; padding:14px 56px; background:#2980b9; color:white; border:none; border-radius:12px; font-family:Impact; font-size:24px; cursor:pointer;">SLUITEN</button>
-      </div>`;
+          <div style="display:grid; grid-template-columns:110px 1fr 240px; gap:10px; font-size:20px; color:#95a5a6; border-bottom:2px solid #34495e; padding-bottom:8px; margin-bottom:10px;">
+            <div>PLAATS</div>
+            <div>NAAM</div>
+            <div style="text-align:right;">${titelWaarde}</div>
+          </div>
+          ${lijstHtml}
+          ${mijnPositieHtml}
+          <button onclick="window.sluit()" style="margin-top:18px; padding:14px 56px; background:#2980b9; color:white; border:none; border-radius:12px; font-family:Impact; font-size:24px; cursor:pointer;">SLUITEN</button>
+        </div>`;
+      const lbMoneyBtn = document.getElementById("lbMoneyBtn");
+      const lbTimeBtn = document.getElementById("lbTimeBtn");
+      if (lbMoneyBtn)
+        lbMoneyBtn.onclick = () => {
+          leaderboardMode = "money";
+          renderLeaderboard();
+        };
+      if (lbTimeBtn)
+        lbTimeBtn.onclick = () => {
+          leaderboardMode = "time";
+          renderLeaderboard();
+        };
+    };
+    renderLeaderboard();
   } catch (err) {
     console.error("Leaderboard laden mislukt:", err);
     overlay.innerHTML = `<div style="background:#111; padding:40px; border:8px solid #e74c3c; border-radius:30px; text-align:center; min-width:560px;">
@@ -1230,6 +1301,107 @@ window.openLeaderboard = async () => {
         <p style="font-size:24px; color:#ecf0f1;">Kon leaderboard niet laden. Probeer opnieuw.</p>
         <button onclick="window.sluit()" style="margin-top:18px; padding:14px 56px; background:#e74c3c; color:white; border:none; border-radius:12px; font-family:Impact; font-size:24px; cursor:pointer;">SLUITEN</button>
       </div>`;
+  }
+};
+
+window.selectMultiplayerServer = async (serverId) => {
+  multiplayerServerId = normalizeServerId(serverId);
+  await window.save(true);
+  subscribeChat();
+  refreshOnlineSpelers();
+  await window.openMultiplayerServers();
+};
+
+window.openMultiplayerServers = async () => {
+  overlay.style.left = "0";
+  overlay.style.pointerEvents = "auto";
+  const actieveServer = getServerById(multiplayerServerId);
+  overlay.innerHTML = `<div style="background:#111; padding:40px; border:8px solid #8b5cf6; border-radius:30px; text-align:center; min-width:680px; max-width:900px; max-height:85vh; overflow-y:auto;">
+      <h1 style="color:#c4b5fd; font-size:52px; margin-bottom:8px;">MULTIPLAYER SERVERS</h1>
+      <p style="margin-bottom:12px; color:#ddd6fe;">Kies een server voor live chat + online spelers.</p>
+      <div style="font-size:20px; color:${actieveServer.accent}; margin-bottom:18px;">Actief: ${escapeHtml(actieveServer.naam)} (${escapeHtml(actieveServer.regio)})</div>
+      <div style="font-size:22px; color:#bdc3c7;">SERVERS LADEN...</div>
+    </div>`;
+
+  if (!firebaseDb) {
+    overlay.innerHTML = `<div style="background:#111; padding:40px; border:8px solid #8b5cf6; border-radius:30px; text-align:center; min-width:680px;">
+      <h1 style="color:#c4b5fd; font-size:52px; margin-bottom:8px;">MULTIPLAYER SERVERS</h1>
+      <p style="font-size:22px; color:#ecf0f1;">Firebase is niet beschikbaar.</p>
+      <p style="font-size:18px; color:#95a5a6;">Zonder online backend kun je geen live servers gebruiken.</p>
+      <button onclick="window.sluit()" style="margin-top:18px; padding:14px 56px; background:#8b5cf6; color:white; border:none; border-radius:12px; font-family:Impact; font-size:24px; cursor:pointer;">SLUITEN</button>
+    </div>`;
+    return;
+  }
+
+  try {
+    const cutoff = Timestamp.fromMillis(Date.now() - ONLINE_SPELER_WINDOW_MS);
+    const onlineQuery = query(
+      collection(firebaseDb, FIREBASE_SAVE_COLLECTION),
+      where("updatedAt", ">=", cutoff),
+      limit(2000),
+    );
+    const snap = await getDocs(onlineQuery);
+    const spelersPerServer = new Map();
+    for (const server of MULTIPLAYER_SERVERS) spelersPerServer.set(server.id, []);
+    snap.forEach((docSnap) => {
+      const data = docSnap.data() || {};
+      const serverId = normalizeServerId(data.multiplayerServerId);
+      const naam = getLeaderboardDisplayName(data, docSnap.id);
+      const lijst = spelersPerServer.get(serverId) || [];
+      lijst.push(naam);
+      spelersPerServer.set(serverId, lijst);
+    });
+
+    const serversHtml = MULTIPLAYER_SERVERS.map((server) => {
+      const spelers = spelersPerServer.get(server.id) || [];
+      const isActief = normalizeServerId(multiplayerServerId) === server.id;
+      const maxPreview = 6;
+      const preview = spelers.slice(0, maxPreview);
+      const resterend = Math.max(0, spelers.length - preview.length);
+      const previewHtml = preview.length
+        ? preview
+            .map(
+              (naam) =>
+                `<span style="display:inline-block; padding:5px 10px; margin:4px; background:#1f2937; border:1px solid #4b5563; border-radius:999px; color:#e5e7eb; font-size:14px;">${escapeHtml(naam)}</span>`,
+            )
+            .join("")
+        : `<span style="color:#6b7280;">Geen online spelers</span>`;
+      const resterendHtml =
+        resterend > 0
+          ? `<div style="color:#9ca3af; font-size:14px; margin-top:4px;">+${resterend} extra online</div>`
+          : "";
+      return `<div style="text-align:left; background:#161b22; border:3px solid ${isActief ? server.accent : "#374151"}; border-radius:14px; padding:14px; margin:10px 0;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:14px;">
+            <div>
+              <div style="font-size:24px; color:${server.accent};">${escapeHtml(server.naam)}</div>
+              <div style="color:#9ca3af;">Regio: ${escapeHtml(server.regio)} | Online: ${spelers.length}</div>
+            </div>
+            <button data-server-select="${server.id}" style="padding:12px 22px; border:none; border-radius:10px; font-family:Impact; font-size:20px; cursor:pointer; background:${isActief ? "#22c55e" : server.accent}; color:white;">${isActief ? "VERBONDEN" : "JOIN"}</button>
+          </div>
+          <div style="margin-top:10px;">${previewHtml}${resterendHtml}</div>
+        </div>`;
+    }).join("");
+
+    overlay.innerHTML = `<div style="background:#111; padding:40px; border:8px solid #8b5cf6; border-radius:30px; text-align:center; min-width:680px; max-width:900px; max-height:85vh; overflow-y:auto;">
+      <h1 style="color:#c4b5fd; font-size:52px; margin-bottom:8px;">MULTIPLAYER SERVERS</h1>
+      <p style="margin-bottom:12px; color:#ddd6fe;">Server kiezen bepaalt je online lobby, chat en zichtbare spelers.</p>
+      ${serversHtml}
+      <button onclick="window.sluit()" style="margin-top:18px; padding:14px 56px; background:#8b5cf6; color:white; border:none; border-radius:12px; font-family:Impact; font-size:24px; cursor:pointer;">SLUITEN</button>
+    </div>`;
+    overlay.querySelectorAll("[data-server-select]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const gekozen = btn.getAttribute("data-server-select");
+        if (!gekozen) return;
+        window.selectMultiplayerServer(gekozen);
+      });
+    });
+  } catch (err) {
+    console.error("Servers laden mislukt:", err);
+    overlay.innerHTML = `<div style="background:#111; padding:40px; border:8px solid #ef4444; border-radius:30px; text-align:center; min-width:680px;">
+      <h1 style="color:#ef4444; font-size:52px; margin-bottom:8px;">SERVER FOUT</h1>
+      <p style="font-size:22px; color:#ecf0f1;">Kon multiplayer servers niet laden.</p>
+      <button onclick="window.sluit()" style="margin-top:18px; padding:14px 56px; background:#ef4444; color:white; border:none; border-radius:12px; font-family:Impact; font-size:24px; cursor:pointer;">SLUITEN</button>
+    </div>`;
   }
 };
 
@@ -1748,6 +1920,7 @@ window.getSaveData = () => ({
   diamanten,
   shopUpgradeLevel,
   shopUpgradePrijs,
+  multiplayerServerId,
   rebirtCount,
   verdienMultiplier,
   totaalSpeeltijdSec,
@@ -1817,6 +1990,7 @@ window.applySaveData = (d) => {
   diamanten = Number.isFinite(d.diamanten) ? d.diamanten : 0;
   shopUpgradeLevel = 0;
   shopUpgradePrijs = SHOP_UPGRADE_VASTE_KOST;
+  multiplayerServerId = normalizeServerId(d.multiplayerServerId);
   rebirtCount = Number.isFinite(d.rebirtCount) ? d.rebirtCount : 0;
   verdienMultiplier = Math.pow(REBIRT_BONUS_STEP, rebirtCount);
   totaalSpeeltijdSec = Number.isFinite(d.totaalSpeeltijdSec)
@@ -1999,6 +2173,7 @@ window.openSettings = () => {
   const accountNaam = getAccountLabel();
   const accountKnopTekst = ingelogdeGebruiker ? "UITLOGGEN" : "INLOGGEN MET GOOGLE";
   const accountKnopKleur = ingelogdeGebruiker ? "#e67e22" : "#4285f4";
+  const actieveServer = getServerById(multiplayerServerId);
   overlay.style.left = "0";
   overlay.style.pointerEvents = "auto";
   overlay.innerHTML = `<div id="settingsPanel" style="background:#111; padding:60px; border:8px solid white; border-radius:30px; text-align:center;">
@@ -2008,6 +2183,7 @@ window.openSettings = () => {
         <button onclick="window.toggleOneindigSpeelveld()" style="width:400px; padding:20px; background:${oneindigSpeelveldOnd ? "#2ecc71" : "#444"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">ONEINDIG SPEELVELD: ${oneindigSpeelveldOnd ? "AAN" : "UIT"}</button><br>
         <button onclick="window.toggleLichtKleur()" style="width:400px; padding:20px; background:${lichtKleur === "hemelsblauw" ? "#87ceeb" : "#333"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">ACHTERGROND: ${lichtKleur === "hemelsblauw" ? "HEMELSBLAUW" : "STANDAARD"}</button><br>
         <button onclick="window.toggleFpsMeter()" style="width:400px; padding:20px; background:${fpsMeterOnd ? "#2ecc71" : "#444"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">FPS METER: ${fpsMeterOnd ? "AAN" : "UIT"}</button><br>
+        <button onclick="window.openMultiplayerServers()" style="width:400px; padding:18px; background:#8b5cf6; color:white; font-family:Impact; font-size:24px; cursor:pointer; border:3px solid white; border-radius:15px; margin-bottom:10px;">SERVERS: ${actieveServer.id}</button><br>
         <div style="width:400px; padding:12px 16px; margin:0 auto 10px; background:#222; border:2px solid #555; border-radius:15px; color:#ddd; font-family:Impact; font-size:20px;">ACCOUNT: ${accountNaam}</div>
         <button onclick="window.toggleGoogleLogin()" style="width:400px; padding:18px; background:${accountKnopKleur}; color:white; font-family:Impact; font-size:24px; cursor:pointer; border:3px solid white; border-radius:15px; margin-bottom:10px;">${accountKnopTekst}</button><br>
         <button onclick="window.openInfoPage()" style="width:400px; padding:16px; background:#1f2937; color:#93c5fd; font-family:Impact; font-size:24px; cursor:pointer; border:3px solid white; border-radius:15px; margin-bottom:10px;">INFO PAGINA</button><br>
