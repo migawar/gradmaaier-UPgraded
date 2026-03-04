@@ -124,6 +124,8 @@ const PRELOGIN_BACKUP_KEY = "grassMasterPreLoginSaveV1";
 const FIREBASE_SAVE_COLLECTION = "saves";
 const FIREBASE_CHAT_COLLECTION = "global_chat";
 const FIREBASE_PRESENCE_COLLECTION = "presence";
+const FIREBASE_PVP_LOBBY_COLLECTION = "pvp_lobbies";
+const FIREBASE_PVP_SCORE_COLLECTION = "pvp_scores";
 const CHAT_MAX_BERICHT_LENGTE = 200;
 const CHAT_MAX_BERICHTEN = 40;
 const CHAT_BERICHT_MAX_LEEFTIJD_MS = 24 * 60 * 60 * 1000;
@@ -136,6 +138,11 @@ const PRESENCE_STALE_MS = 12 * 1000;
 const PRESENCE_FORCE_SYNC_MS = 4500;
 const PRESENCE_MOVE_EPSILON = 0.2;
 const PRESENCE_ROT_EPSILON = 0.09;
+const PVP_DURATION_MS = 60 * 1000;
+const PVP_SCORE_PUSH_MS = 1500;
+const PVP_FORCE_SPEED = 0.11;
+const PVP_FORCE_RADIUS = 2.15;
+const PVP_WIN_REWARD_DIAMANT = 3;
 const MULTIPLAYER_DEFAULT_SERVER = "EU-1";
 const CUSTOM_SERVER_PREFIX = "ROOM-";
 const CUSTOM_SERVER_REGEX = /^ROOM-[A-Z0-9]{4,12}$/;
@@ -224,6 +231,10 @@ const MAP_PRESETS = [
     ],
   },
 ];
+const PVP_MODES = [
+  { id: "MOST_GRASS", naam: "MEEST GRAS" },
+  { id: "MOST_DISTANCE", naam: "MEEST AFSTAND" },
+];
 const REMOTE_TRAIL_POINT_DISTANCE = 0.55;
 const REMOTE_TRAIL_MAX_POINTS = 64;
 const PLAYER_COLLISION_RADIUS = 0.58;
@@ -286,6 +297,21 @@ let customServers = [];
 let presenceUnsubscribe = null;
 let presenceHeartbeatId = null;
 let presenceHeartbeatBusy = false;
+let pvpLobbyUnsubscribe = null;
+let pvpScoreUnsubscribe = null;
+let pvpScoreIntervalId = null;
+const pvpState = {
+  active: false,
+  gameId: "",
+  serverId: MULTIPLAYER_DEFAULT_SERVER,
+  mode: "MOST_GRASS",
+  hostUid: "",
+  endAtMs: 0,
+  endSent: false,
+  score: 0,
+  leaderboard: [],
+  rewardDoneForGameId: "",
+};
 let lastPresenceSnapshot = {
   initialized: false,
   x: 0,
@@ -472,6 +498,14 @@ const getSaveDocRef = (uid) =>
   doc(firebaseDb, FIREBASE_SAVE_COLLECTION, String(uid));
 const getPresenceDocRef = (uid) =>
   doc(firebaseDb, FIREBASE_PRESENCE_COLLECTION, String(uid));
+const getPvpLobbyDocRef = (serverId) =>
+  doc(firebaseDb, FIREBASE_PVP_LOBBY_COLLECTION, String(normalizeServerId(serverId)));
+const getPvpScoreDocRef = (serverId, uid) =>
+  doc(
+    firebaseDb,
+    FIREBASE_PVP_SCORE_COLLECTION,
+    `${normalizeServerId(serverId)}__${String(uid || "")}`,
+  );
 const escapeHtml = (value) =>
   String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -1161,6 +1195,7 @@ const refreshChatForAuthState = () => {
     stopPresenceSubscription();
     clearRemotePlayers();
     lastPresenceSnapshot.initialized = false;
+    stopPvpSync();
     setChatOnlineCount(0);
     setChatStatus("Log in met Google", "#f59e0b");
   }
@@ -1257,11 +1292,13 @@ ui.innerHTML = `
     <div id="miniGameSlot" style="position:absolute; top:300px; right:20px; pointer-events:auto;"></div>
     <button onclick="window.openSettings()" style="position:absolute; top:20px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.7); color:white; border:3px solid white; padding:10px 30px; border-radius:15px; font-size:20px; cursor:pointer; pointer-events:auto; font-family:Impact;">INSTELLINGEN</button>
     <div id="fpsDisp" style="position:absolute; top:72px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.78); border:3px solid #7f8c8d; color:#ecf0f1; padding:7px 14px; border-radius:12px; font-size:20px; pointer-events:none; display:none;">FPS: --</div>
+    <div id="pvpDisp" style="position:absolute; top:115px; left:50%; transform:translateX(-50%); background:rgba(2, 132, 199, 0.9); border:3px solid white; color:white; padding:7px 14px; border-radius:12px; font-size:20px; pointer-events:none; display:none;">PVP: --</div>
     <button id="shopBtn" onclick="window.openShop()" style="position:absolute; top:220px; right:20px; background:linear-gradient(to bottom, #5dade2, #2e86c1); color:white; border:5px solid white; padding:16px 40px; border-radius:18px; font-size:28px; cursor:pointer; pointer-events:auto; font-family:Impact;">SHOP</button>
     <div id="upgradeMenu" style="position:absolute; top:50%; left:20px; transform:translateY(-50%); display:flex; flex-direction:column; gap:12px; pointer-events:auto;"></div>
     <button id="gpBtn" onclick="window.openGP()" style="position:absolute; bottom:25px; left:25px; background:linear-gradient(to bottom, #f1c40f, #f39c12); color:white; border:5px solid white; padding:25px 50px; border-radius:20px; font-size:32px; cursor:pointer; pointer-events:auto; font-family:Impact;">GRASSPASS</button>
     <div id="rightPanel" style="position:absolute; bottom:25px; right:25px; display:flex; flex-direction:column; gap:10px; align-items:flex-end; pointer-events:auto;">
         <button onclick="window.openCheat()" style="background:#e74c3c; color:white; border:3px solid white; padding:10px 20px; border-radius:10px; cursor:pointer; font-size:18px; font-family:Impact;">REDEEM CODE</button>
+        <button onclick="window.openPvpMiniGames()" style="background:#0ea5e9; color:white; border:3px solid white; padding:10px 20px; border-radius:10px; cursor:pointer; font-size:18px; font-family:Impact;">PVP MINIGAMES</button>
         <button id="eventBtn" onclick="window.openEvent()" style="background:#9b59b6; color:white; border:5px solid white; padding:20px 45px; border-radius:20px; font-size:24px; cursor:pointer; font-family:Impact;">EVENT</button>
     </div>
     <div id="saveToast" style="position:absolute; bottom:10px; left:50%; transform:translateX(-50%); color:rgba(255,255,255,0.5); font-size:12px; opacity:0; transition:0.5s;">GAME OPGESLAGEN...</div>
@@ -1289,6 +1326,16 @@ window.updateUI = () => {
   setDisplay("gpBtn", !isCreative);
   setDisplay("rightPanel", !isCreative, "flex");
   setDisplay("fpsDisp", fpsMeterOnd);
+  const pvpEl = document.getElementById("pvpDisp");
+  if (pvpEl) {
+    if (pvpState.active) {
+      const resterend = Math.max(0, Math.ceil((pvpState.endAtMs - nu) / 1000));
+      pvpEl.style.display = "block";
+      pvpEl.innerText = `PVP ${getPvpModeById(pvpState.mode).naam}: ${Math.floor(pvpState.score)} (${resterend}s)`;
+    } else {
+      pvpEl.style.display = "none";
+    }
+  }
 
   if (isCreative) {
     miniGameKnopZichtbaar = false;
@@ -1806,6 +1853,7 @@ window.selectMultiplayerServer = async (serverId) => {
   subscribeChat();
   refreshOnlineSpelers();
   refreshPresenceSync();
+  refreshPvpSync();
   await window.openMultiplayerServers();
 };
 
@@ -1938,6 +1986,232 @@ window.openMultiplayerServers = async () => {
       <button onclick="window.sluit()" style="margin-top:18px; padding:14px 56px; background:#ef4444; color:white; border:none; border-radius:12px; font-family:Impact; font-size:24px; cursor:pointer;">SLUITEN</button>
     </div>`;
   }
+};
+
+const stopPvpScorePush = () => {
+  if (!pvpScoreIntervalId) return;
+  clearInterval(pvpScoreIntervalId);
+  pvpScoreIntervalId = null;
+};
+const stopPvpScoreSubscription = () => {
+  if (!pvpScoreUnsubscribe) return;
+  pvpScoreUnsubscribe();
+  pvpScoreUnsubscribe = null;
+};
+const stopPvpLobbySubscription = () => {
+  if (!pvpLobbyUnsubscribe) return;
+  pvpLobbyUnsubscribe();
+  pvpLobbyUnsubscribe = null;
+};
+const stopPvpSync = () => {
+  stopPvpScorePush();
+  stopPvpScoreSubscription();
+  stopPvpLobbySubscription();
+  pvpState.active = false;
+  pvpState.gameId = "";
+  pvpState.endSent = false;
+  pvpState.leaderboard = [];
+  pvpState.score = 0;
+};
+const tryMarkPvpEnded = async () => {
+  if (!firebaseDb || !ingelogdeGebruiker || !pvpState.gameId || pvpState.endSent) return;
+  if (String(ingelogdeGebruiker.uid || "") !== String(pvpState.hostUid || "")) return;
+  pvpState.endSent = true;
+  try {
+    await setDoc(
+      getPvpLobbyDocRef(pvpState.serverId),
+      {
+        status: "ended",
+        gameId: pvpState.gameId,
+        serverId: pvpState.serverId,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (err) {
+    console.error("PVP einde sync mislukt:", err);
+  }
+};
+const getPvpModeById = (modeId) =>
+  PVP_MODES.find((m) => m.id === String(modeId || "").toUpperCase()) || PVP_MODES[0];
+const publishPvpScore = async () => {
+  if (!firebaseDb || !ingelogdeGebruiker || !pvpState.active || !pvpState.gameId) return;
+  try {
+    await setDoc(
+      getPvpScoreDocRef(pvpState.serverId, ingelogdeGebruiker.uid),
+      {
+        uid: String(ingelogdeGebruiker.uid || ""),
+        displayName: getChatDisplayName(),
+        serverId: pvpState.serverId,
+        gameId: pvpState.gameId,
+        mode: pvpState.mode,
+        score: Number(pvpState.score) || 0,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (err) {
+    console.error("PVP score sync mislukt:", err);
+  }
+};
+const startPvpScorePush = () => {
+  stopPvpScorePush();
+  if (!pvpState.active) return;
+  publishPvpScore();
+  pvpScoreIntervalId = setInterval(publishPvpScore, PVP_SCORE_PUSH_MS);
+};
+const subscribePvpScores = () => {
+  stopPvpScoreSubscription();
+  if (!firebaseDb || !ingelogdeGebruiker || !pvpState.active || !pvpState.gameId) return;
+  const scoreQuery = query(
+    collection(firebaseDb, FIREBASE_PVP_SCORE_COLLECTION),
+    orderBy("updatedAt", "desc"),
+    limit(250),
+  );
+  pvpScoreUnsubscribe = onSnapshot(
+    scoreQuery,
+    (snapshot) => {
+      const perUid = new Map();
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() || {};
+        if (normalizeServerId(data.serverId) !== pvpState.serverId) return;
+        if (String(data.gameId || "") !== pvpState.gameId) return;
+        const uid = String(data.uid || docSnap.id);
+        const score = Number(data.score);
+        if (!uid || !Number.isFinite(score)) return;
+        const bestaand = perUid.get(uid);
+        if (bestaand && bestaand.score >= score) return;
+        perUid.set(uid, {
+          uid,
+          naam: String(data.displayName || "SPELER").slice(0, 24),
+          score: Math.max(0, score),
+        });
+      });
+      pvpState.leaderboard = [...perUid.values()].sort((a, b) => b.score - a.score);
+    },
+    (err) => console.error("PVP score stream fout:", err),
+  );
+};
+const applyPvpLobbyData = (data) => {
+  if (!data || String(data.status || "") !== "running") {
+    pvpState.active = false;
+    pvpState.gameId = "";
+    pvpState.endSent = false;
+    pvpState.score = 0;
+    pvpState.leaderboard = [];
+    stopPvpScorePush();
+    stopPvpScoreSubscription();
+    return;
+  }
+  const mode = getPvpModeById(data.mode);
+  const serverId = normalizeServerId(data.serverId || multiplayerServerId);
+  const gameId = String(data.gameId || "");
+  const endAtMs = Number(data.endsAtMs) || 0;
+  if (!gameId || endAtMs <= Date.now()) {
+    pvpState.active = false;
+    pvpState.gameId = "";
+    stopPvpScorePush();
+    stopPvpScoreSubscription();
+    return;
+  }
+  const isNewGame = !pvpState.active || pvpState.gameId !== gameId;
+  pvpState.active = true;
+  pvpState.gameId = gameId;
+  pvpState.mode = mode.id;
+  pvpState.serverId = serverId;
+  pvpState.endAtMs = endAtMs;
+  pvpState.hostUid = String(data.hostUid || "");
+  if (isNewGame) {
+    pvpState.endSent = false;
+    pvpState.score = 0;
+    pvpState.leaderboard = [];
+    if (gameMode === "classic") window.resetClassicGrassField();
+    startPvpScorePush();
+    subscribePvpScores();
+  }
+};
+const subscribePvpLobby = () => {
+  stopPvpLobbySubscription();
+  if (!firebaseDb || !ingelogdeGebruiker) {
+    stopPvpSync();
+    return;
+  }
+  pvpLobbyUnsubscribe = onSnapshot(
+    getPvpLobbyDocRef(multiplayerServerId),
+    (snap) => applyPvpLobbyData(snap.exists() ? snap.data() : null),
+    (err) => console.error("PVP lobby stream fout:", err),
+  );
+};
+const refreshPvpSync = () => {
+  stopPvpScorePush();
+  stopPvpScoreSubscription();
+  pvpState.active = false;
+  pvpState.gameId = "";
+  pvpState.score = 0;
+  pvpState.leaderboard = [];
+  subscribePvpLobby();
+};
+window.startPvpMiniGame = async (modeId) => {
+  if (!firebaseDb || !ingelogdeGebruiker) {
+    alert("Log in met Google om PvP te starten.");
+    return;
+  }
+  if (gameMode !== "classic") {
+    alert("PvP minigames werken alleen in CLASSIC mode.");
+    return;
+  }
+  const mode = getPvpModeById(modeId);
+  const gameId = `${Date.now()}_${String(ingelogdeGebruiker.uid || "").slice(0, 8)}`;
+  const endAtMs = Date.now() + PVP_DURATION_MS;
+  try {
+    await setDoc(
+      getPvpLobbyDocRef(multiplayerServerId),
+      {
+        serverId: normalizeServerId(multiplayerServerId),
+        gameId,
+        mode: mode.id,
+        status: "running",
+        hostUid: String(ingelogdeGebruiker.uid || ""),
+        endsAtMs: endAtMs,
+        speed: PVP_FORCE_SPEED,
+        radius: PVP_FORCE_RADIUS,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (err) {
+    console.error("PVP start mislukt:", err);
+    alert("Kon PvP minigame niet starten.");
+  }
+};
+window.openPvpMiniGames = () => {
+  const modeButtons = PVP_MODES.map(
+    (mode) =>
+      `<button onclick="window.startPvpMiniGame('${mode.id}')" style="padding:12px 18px; background:#0ea5e9; color:white; border:2px solid white; border-radius:10px; font-family:Impact; font-size:20px; cursor:pointer;">START ${mode.naam}</button>`,
+  ).join("");
+  const resterendSec = pvpState.active ? Math.max(0, Math.ceil((pvpState.endAtMs - Date.now()) / 1000)) : 0;
+  const leaderboardHtml = pvpState.leaderboard.length
+    ? pvpState.leaderboard
+        .slice(0, 8)
+        .map(
+          (item, idx) =>
+            `<div style="display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px solid #334155;"><span>#${idx + 1} ${escapeHtml(item.naam)}</span><span>${Math.floor(item.score)}</span></div>`,
+        )
+        .join("")
+    : `<div style="color:#94a3b8;">Nog geen scores</div>`;
+  overlay.style.left = "0";
+  overlay.style.pointerEvents = "auto";
+  overlay.innerHTML = `<div style="background:#111; padding:40px; border:8px solid #0ea5e9; border-radius:30px; text-align:center; min-width:640px; max-width:860px; max-height:85vh; overflow-y:auto;">
+      <h1 style="color:#67e8f9; font-size:52px; margin-bottom:8px;">PVP MINIGAMES</h1>
+      <p style="color:#bae6fd; margin-bottom:14px;">Eerlijke match: iedereen speelt met dezelfde speed en radius.</p>
+      <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:14px;">${modeButtons}</div>
+      <div style="background:#0b1220; border:2px solid #1e3a8a; border-radius:12px; padding:12px; text-align:left;">
+        <div style="font-size:20px; color:#e2e8f0; margin-bottom:6px;">Status: ${pvpState.active ? `ACTIEF (${escapeHtml(getPvpModeById(pvpState.mode).naam)}) - ${resterendSec}s` : "Geen actieve match"}</div>
+        <div style="font-size:18px; color:#93c5fd; margin-bottom:8px;">Jouw score: ${Math.floor(pvpState.score)}</div>
+        ${leaderboardHtml}
+      </div>
+      <button onclick="window.sluit()" style="margin-top:18px; padding:14px 56px; background:#0ea5e9; color:white; border:none; border-radius:12px; font-family:Impact; font-size:24px; cursor:pointer;">SLUITEN</button>
+    </div>`;
 };
 
 window.selectMap = async (mapId) => {
@@ -2693,6 +2967,7 @@ window.initFirebase = () => {
       subscribeChat();
       startChatMaintenance();
       refreshPresenceSync();
+      refreshPvpSync();
     });
   } catch (err) {
     console.error("Firebase init mislukt:", err);
@@ -3416,6 +3691,11 @@ function cutGrassAtIndex(i, now) {
   grassDummy.position.set(g.x, GRASS_HIDDEN_Y, g.z);
   grassDummy.updateMatrix();
   grassMesh.setMatrixAt(i, grassDummy.matrix);
+  if (pvpState.active && gameMode === "classic") {
+    if (pvpState.mode === "MOST_GRASS") pvpState.score += 1;
+    uiDirty = true;
+    return true;
+  }
   if (gameMode === "classic") {
     const opbrengst = grasWaarde * EARN_MULTIPLIER * verdienMultiplier;
     geld += opbrengst;
@@ -3436,8 +3716,7 @@ function updateGroundTiles() {
   }
 }
 
-function cutGrassNearMowerClassic(now, maaierRadiusSq) {
-  const radius = huidigMowerRadius;
+function cutGrassNearMowerClassic(now, maaierRadiusSq, radius) {
   const minX = Math.max(
     0,
     Math.floor((mower.position.x - radius - GRID_ORIGIN) * INV_GRASS_SPACING),
@@ -3537,9 +3816,17 @@ function animate(nowPerf = performance.now()) {
 
   const deltaSec = FRAME_INTERVAL_MS / 1000;
   const frameFactor = Math.min(3, deltaSec * 60);
-  let s = (gameMode === "creative" ? creativeSpeed : huidigeSnelheid) * frameFactor;
-  const turnSpeed = BASE_TURN_SPEED * frameFactor;
   const now = Date.now();
+  if (pvpState.active && now >= pvpState.endAtMs) {
+    pvpState.active = false;
+    uiDirty = true;
+    stopPvpScorePush();
+    tryMarkPvpEnded();
+  }
+  const pvpEqualized = pvpState.active && gameMode === "classic";
+  let s = (gameMode === "creative" ? creativeSpeed : huidigeSnelheid) * frameFactor;
+  if (pvpEqualized) s = PVP_FORCE_SPEED * frameFactor;
+  const turnSpeed = BASE_TURN_SPEED * frameFactor;
   totaalSpeeltijdSec += deltaSec;
   if (
     (actieveOpdracht && actieveOpdracht.id === "p") ||
@@ -3571,6 +3858,10 @@ function animate(nowPerf = performance.now()) {
   const dxMove = mower.position.x - prevPosX;
   const dzMove = mower.position.z - prevPosZ;
   const mowerIsMoving = dxMove * dxMove + dzMove * dzMove > 0.0001;
+  if (pvpState.active && pvpState.mode === "MOST_DISTANCE" && gameMode === "classic") {
+    pvpState.score += Math.sqrt(dxMove * dxMove + dzMove * dzMove) * 10;
+    uiDirty = true;
+  }
   if (mowerBlueKit && mowerBlueKit.visible && mowerBlueRotors.length) {
     for (const rotor of mowerBlueRotors) rotor.rotation.z += 0.25 * frameFactor;
   }
@@ -3580,7 +3871,9 @@ function animate(nowPerf = performance.now()) {
   }
   updateFpsMeter();
   updateGroundTiles();
-  const maaierRadiusSq = huidigMowerRadius * huidigMowerRadius;
+  const effectieveRadius =
+    pvpEqualized ? PVP_FORCE_RADIUS : huidigMowerRadius;
+  const maaierRadiusSq = effectieveRadius * effectieveRadius;
   let matrixUpdateNodig = false;
   if (mowerIsMoving) {
     if (isOneindigSpeelveldActief()) {
@@ -3594,7 +3887,7 @@ function animate(nowPerf = performance.now()) {
       }
     } else {
       creativeUpdateSkipCounter = 0;
-      matrixUpdateNodig = cutGrassNearMowerClassic(now, maaierRadiusSq);
+      matrixUpdateNodig = cutGrassNearMowerClassic(now, maaierRadiusSq, effectieveRadius);
     }
   } else {
     creativeUpdateSkipCounter = 0;
