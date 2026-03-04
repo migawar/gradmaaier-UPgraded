@@ -1190,6 +1190,7 @@ const refreshOnlineSpelers = async () => {
     const actieveServerId = normalizeServerId(multiplayerServerId);
     const onlineQuery = query(
       collection(firebaseDb, FIREBASE_SAVE_COLLECTION),
+      where("multiplayerServerId", "==", actieveServerId),
       where("updatedAt", ">=", cutoff),
       limit(2000),
     );
@@ -1202,9 +1203,15 @@ const refreshOnlineSpelers = async () => {
       }
     });
     setChatOnlineCount(onlineInServer);
+    setChatOnlineCount(onlineSnap.size);
   } catch (err) {
     if (err?.code !== "permission-denied") {
       console.error("Online spelers ophalen mislukt:", err);
+      if (err?.code === "failed-precondition") {
+        console.warn(
+          "Firebase index voor online spelers niet gevonden. Query is minder efficient. Maak een composite index aan op (saves): multiplayerServerId ASC, updatedAt DESC",
+        );
+      }
     }
     setChatOnlineCount(0);
   } finally {
@@ -2045,6 +2052,7 @@ window.openLeaderboard = async () => {
 };
 
 window.selectMultiplayerServer = async (serverId) => {
+  const wasOnHell = multiplayerServerId === "HELL";
   multiplayerServerId = normalizeServerId(serverId);
   if (CUSTOM_SERVER_REGEX.test(multiplayerServerId)) {
     registerCustomServer(multiplayerServerId);
@@ -2052,6 +2060,9 @@ window.selectMultiplayerServer = async (serverId) => {
   lastPresenceSnapshot.initialized = false;
   if (multiplayerServerId === "HELL") {
     huidigeMapId = "HELL";
+    window.applyMapTheme();
+  } else if (wasOnHell) {
+    huidigeMapId = "CLASSIC";
     window.applyMapTheme();
   }
   await window.save(true);
@@ -4268,9 +4279,22 @@ const updateHellCars = (deltaFactor) => {
     if (distToPlayerSq < 5) {
       alert("JE BENT DOOD! Pas op voor de Hell Cars.");
       huidigeMapId = "CLASSIC";
+      alert("JE BENT DOOD! Je wordt naar de Europe server gestuurd.");
+      multiplayerServerId = "EU-1";
+      huidigeMapId = "CLASSIC"; // Ga terug naar de standaard map
       mower.position.set(0, 0, 0);
+
+      // Pas thema en UI aan voor de nieuwe map/server
       window.applyMapTheme();
       window.updateUI();
+
+      // Synchroniseer met de nieuwe server
+      lastPresenceSnapshot.initialized = false;
+      subscribeChat();
+      refreshOnlineSpelers();
+      refreshPresenceSync();
+      refreshPvpSync();
+
       window.save(true);
     }
   }
