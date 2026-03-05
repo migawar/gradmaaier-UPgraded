@@ -269,7 +269,7 @@ const alleSkinKleuren = {
   STARTER: 0x34d399,
   RED: 0xff0000,
   BLUE: 0x0000ff,
-  GOLDEN: 0xfacc15,
+  GOLDEN: 0xdc2626,
   JANUARI: 0xffffff,
   FEBRUARI: 0xffc0cb,
   MAART: 0xffd700,
@@ -297,10 +297,10 @@ const skinVisualOverrides = {
     shininess: 90,
   },
   GOLDEN: {
-    emissive: 0x7a5b00,
-    emissiveIntensity: 0.4,
-    specular: 0xfff1a8,
-    shininess: 145,
+    emissive: 0x5b0d12,
+    emissiveIntensity: 0.34,
+    specular: 0xffd6d6,
+    shininess: 165,
   },
   JANUARI: {
     emissive: 0x6f6f8a,
@@ -382,6 +382,7 @@ let mowerBodyMaterial = null;
 let mowerDetailedModel = null;
 let mowerRedBlock = null;
 let mowerStarterKit = null;
+let mowerFerrariKit = null;
 let mowerBlueKit = null;
 let mowerBlueRotors = [];
 let mowerBlueAuraLight = null;
@@ -945,6 +946,7 @@ window.applySkinVisual = (skinNaam) => {
   const isStarter = skinNaam === "STARTER";
   const isRed = skinNaam === "RED";
   const isBlue = skinNaam === "BLUE";
+  const isFerrari = skinNaam === "GOLDEN";
   const isOmgekeerd = !isStarter && !isRed && !isBlue;
   const override = skinVisualOverrides[skinNaam] || {};
 
@@ -966,6 +968,10 @@ window.applySkinVisual = (skinNaam) => {
   if (mowerStarterKit) {
     mowerStarterKit.visible = isStarter;
     mowerStarterKit.rotation.y = isStarter ? 0 : Math.PI;
+  }
+  if (mowerFerrariKit) {
+    mowerFerrariKit.visible = isFerrari;
+    mowerFerrariKit.rotation.y = isFerrari ? 0 : Math.PI;
   }
   if (mowerBlueKit) {
     mowerBlueKit.visible = isBlue;
@@ -2303,6 +2309,94 @@ mowerStarterKit.add(starterLightR);
 
 mowerStarterKit.visible = false;
 mowerDetailedModel.add(mowerStarterKit);
+
+mowerFerrariKit = new THREE.Group();
+const ferrariPaintMaterial = new THREE.MeshPhongMaterial({
+  color: 0xdc2626,
+  emissive: 0x5b0d12,
+  emissiveIntensity: 0.34,
+  specular: 0xffd6d6,
+  shininess: 165,
+});
+const ferrariDarkMaterial = new THREE.MeshPhongMaterial({
+  color: 0x111827,
+  specular: 0xd1d5db,
+  shininess: 95,
+});
+const ferrariLightMaterial = new THREE.MeshBasicMaterial({ color: 0xfff4f4 });
+
+const ferrariFrontSplitter = new THREE.Mesh(
+  new THREE.BoxGeometry(1.26, 0.08, 0.24),
+  ferrariDarkMaterial,
+);
+ferrariFrontSplitter.position.set(0, 0.23, 1.42);
+mowerFerrariKit.add(ferrariFrontSplitter);
+
+const ferrariHood = new THREE.Mesh(
+  new THREE.BoxGeometry(1.04, 0.11, 0.35),
+  ferrariPaintMaterial,
+);
+ferrariHood.position.set(0, 0.36, 1.18);
+mowerFerrariKit.add(ferrariHood);
+
+const ferrariSideSkirtL = new THREE.Mesh(
+  new THREE.BoxGeometry(0.07, 0.12, 1.18),
+  ferrariDarkMaterial,
+);
+ferrariSideSkirtL.position.set(-0.74, 0.25, 0.35);
+mowerFerrariKit.add(ferrariSideSkirtL);
+
+const ferrariSideSkirtR = new THREE.Mesh(
+  new THREE.BoxGeometry(0.07, 0.12, 1.18),
+  ferrariDarkMaterial,
+);
+ferrariSideSkirtR.position.set(0.74, 0.25, 0.35);
+mowerFerrariKit.add(ferrariSideSkirtR);
+
+const ferrariCockpit = new THREE.Mesh(
+  new THREE.BoxGeometry(0.74, 0.17, 0.5),
+  ferrariPaintMaterial,
+);
+ferrariCockpit.position.set(0, 0.84, -0.2);
+mowerFerrariKit.add(ferrariCockpit);
+
+const ferrariSpoilerBlade = new THREE.Mesh(
+  new THREE.BoxGeometry(1.18, 0.07, 0.2),
+  ferrariDarkMaterial,
+);
+ferrariSpoilerBlade.position.set(0, 0.96, -0.86);
+mowerFerrariKit.add(ferrariSpoilerBlade);
+
+const ferrariSpoilerSupportL = new THREE.Mesh(
+  new THREE.BoxGeometry(0.08, 0.22, 0.08),
+  ferrariPaintMaterial,
+);
+ferrariSpoilerSupportL.position.set(-0.45, 0.85, -0.78);
+mowerFerrariKit.add(ferrariSpoilerSupportL);
+
+const ferrariSpoilerSupportR = new THREE.Mesh(
+  new THREE.BoxGeometry(0.08, 0.22, 0.08),
+  ferrariPaintMaterial,
+);
+ferrariSpoilerSupportR.position.set(0.45, 0.85, -0.78);
+mowerFerrariKit.add(ferrariSpoilerSupportR);
+
+const ferrariLightL = new THREE.Mesh(
+  new THREE.BoxGeometry(0.13, 0.07, 0.03),
+  ferrariLightMaterial,
+);
+ferrariLightL.position.set(-0.3, 0.39, 1.48);
+mowerFerrariKit.add(ferrariLightL);
+
+const ferrariLightR = new THREE.Mesh(
+  new THREE.BoxGeometry(0.13, 0.07, 0.03),
+  ferrariLightMaterial,
+);
+ferrariLightR.position.set(0.3, 0.39, 1.48);
+mowerFerrariKit.add(ferrariLightR);
+
+mowerFerrariKit.visible = false;
+mowerDetailedModel.add(mowerFerrariKit);
 
 mowerBlueKit = new THREE.Group();
 const bluePaintMaterial = new THREE.MeshPhongMaterial({
