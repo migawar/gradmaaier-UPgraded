@@ -107,6 +107,9 @@ let miniGameTimer = null;
 let miniGameActief = false;
 let miniGameMarkerPos = 0;
 let miniGameMarkerRichting = 1;
+let hellCarSpawnTimer = null;
+let lastServerExpiryCheck = 0;
+const SERVER_EXPIRY_CHECK_INTERVAL_MS = 10000;
 const MINIGAME_CHECK_INTERVAL_MS = 15000;
 const MINIGAME_KANS = 0.18;
 const MINIGAME_COOLDOWN_MS = 45000;
@@ -712,7 +715,7 @@ const createCustomServerDescriptor = (serverId) => {
     isCustom: true,
   };
 };
-const CUSTOM_SERVER_LIFETIME_MS = 24 * 60 * 60 * 1000;
+const CUSTOM_SERVER_LIFETIME_MS = 12 * 60 * 60 * 1000;
 const sanitizeCustomServers = (value) => {
   if (!Array.isArray(value)) return [];
   const result = [];
@@ -2051,7 +2054,7 @@ window.openLeaderboard = async () => {
   }
 };
 
-window.selectMultiplayerServer = async (serverId) => {
+window.selectMultiplayerServer = async (serverId, options = {}) => {
   const wasOnHell = multiplayerServerId === "HELL";
   multiplayerServerId = normalizeServerId(serverId);
   if (CUSTOM_SERVER_REGEX.test(multiplayerServerId)) {
@@ -2070,7 +2073,9 @@ window.selectMultiplayerServer = async (serverId) => {
   refreshOnlineSpelers();
   refreshPresenceSync();
   refreshPvpSync();
-  await window.openMultiplayerServers();
+  if (options.openUi !== false) {
+    await window.openMultiplayerServers();
+  }
 };
 
 window.createCustomServer = async () => {
@@ -4301,6 +4306,10 @@ const updateHellCars = (deltaFactor) => {
 };
 
 const applyMapTheme = () => {
+  if (hellCarSpawnTimer) {
+    clearTimeout(hellCarSpawnTimer);
+    hellCarSpawnTimer = null;
+  }
   const map = getMapById(huidigeMapId);
   const skyColor = lichtKleur === "hemelsblauw" ? 0x87ceeb : Number(map.sky ?? 0x222222);
   scene.background = new THREE.Color(skyColor);
@@ -4319,7 +4328,7 @@ const applyMapTheme = () => {
   rebuildMapDecor();
   if (huidigeMapId === "HELL") {
     currentMapHalfSize = 400; // Groot, maar niet eindig (wel eindig, maar groot)
-    initHellCars();
+    hellCarSpawnTimer = setTimeout(initHellCars, 30000);
   } else {
     currentMapHalfSize = MAP_HALF_SIZE;
     hellCarGroup.clear();
@@ -4570,6 +4579,18 @@ function animate(nowPerf = performance.now()) {
   const deltaSec = FRAME_INTERVAL_MS / 1000;
   const frameFactor = Math.min(3, deltaSec * 60);
   const now = Date.now();
+
+  if (now - lastServerExpiryCheck > SERVER_EXPIRY_CHECK_INTERVAL_MS) {
+    lastServerExpiryCheck = now;
+    if (CUSTOM_SERVER_REGEX.test(multiplayerServerId)) {
+      const serverData = customServers.find((s) => s.id === multiplayerServerId);
+      if (serverData && serverData.createdAt && now - serverData.createdAt > CUSTOM_SERVER_LIFETIME_MS) {
+        alert("Deze privé-server is verlopen. Je wordt naar de Europe server gestuurd.");
+        window.selectMultiplayerServer("EU-1", { openUi: false });
+      }
+    }
+  }
+
   if (pvpState.active && now >= pvpState.endAtMs) {
     pvpState.active = false;
     uiDirty = true;
