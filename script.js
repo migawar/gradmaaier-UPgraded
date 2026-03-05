@@ -196,6 +196,12 @@ const MAP_PRESETS = [
     fog: { color: 0x101b33, near: 55, far: 230 },
   },
 ];
+const DIAMANT_SKINS_SHOP = [
+  { id: "OBSIDIAN", naam: "OBSIDIAN", prijs: 120, kleur: "#111827" },
+  { id: "NEON", naam: "NEON", prijs: 260, kleur: "#22d3ee" },
+  { id: "VOID", naam: "VOID", prijs: 450, kleur: "#7c3aed" },
+];
+const DIAMANT_SKIN_IDS = DIAMANT_SKINS_SHOP.map((skin) => skin.id);
 const normalizeMapId = (rawId) => {
   const id = String(rawId ?? "").trim().toUpperCase();
   return MAP_PRESETS.some((map) => map.id === id) ? id : "CLASSIC";
@@ -270,6 +276,9 @@ const alleSkinKleuren = {
   RED: 0xff0000,
   BLUE: 0x0000ff,
   GOLDEN: 0xdc2626,
+  OBSIDIAN: 0x111827,
+  NEON: 0x22d3ee,
+  VOID: 0x7c3aed,
   JANUARI: 0xffffff,
   FEBRUARI: 0xffc0cb,
   MAART: 0xffd700,
@@ -301,6 +310,24 @@ const skinVisualOverrides = {
     emissiveIntensity: 0.34,
     specular: 0xffd6d6,
     shininess: 165,
+  },
+  OBSIDIAN: {
+    emissive: 0x04070f,
+    emissiveIntensity: 0.48,
+    specular: 0x98a2b3,
+    shininess: 120,
+  },
+  NEON: {
+    emissive: 0x0f5f66,
+    emissiveIntensity: 0.55,
+    specular: 0xd9fbff,
+    shininess: 115,
+  },
+  VOID: {
+    emissive: 0x220f53,
+    emissiveIntensity: 0.62,
+    specular: 0xe3d3ff,
+    shininess: 135,
   },
   JANUARI: {
     emissive: 0x6f6f8a,
@@ -376,6 +403,61 @@ const skinVisualOverrides = {
     shininess: 88,
   },
 };
+const SKIN_SPECIAL_EFFECTS = {
+  GOLDEN: {
+    auraColor: 0xf97316,
+    auraBase: 1.2,
+    auraPulse: 0.34,
+    pulseSpeed: 5.2,
+    ringColor: 0xffedd5,
+    ringOpacity: 0.4,
+    ringScaleBase: 1.02,
+    ringScalePulse: 0.11,
+    ringSpin: 2.8,
+    trailColor: 0xfda4af,
+    trailStep: 0.22,
+  },
+  OBSIDIAN: {
+    auraColor: 0x6b7280,
+    auraBase: 1.05,
+    auraPulse: 0.26,
+    pulseSpeed: 3.7,
+    ringColor: 0x94a3b8,
+    ringOpacity: 0.35,
+    ringScaleBase: 1.03,
+    ringScalePulse: 0.08,
+    ringSpin: 1.9,
+    trailColor: 0x9ca3af,
+    trailStep: 0.25,
+  },
+  NEON: {
+    auraColor: 0x22d3ee,
+    auraBase: 1.16,
+    auraPulse: 0.33,
+    pulseSpeed: 6,
+    ringColor: 0x67e8f9,
+    ringOpacity: 0.46,
+    ringScaleBase: 1.01,
+    ringScalePulse: 0.08,
+    ringSpin: 2.8,
+    trailColor: 0x22d3ee,
+    trailStep: 0.2,
+  },
+  VOID: {
+    auraColor: 0x7c3aed,
+    auraBase: 1.18,
+    auraPulse: 0.4,
+    pulseSpeed: 4.1,
+    ringColor: 0xa78bfa,
+    ringOpacity: 0.42,
+    ringScaleBase: 1.03,
+    ringScalePulse: 0.1,
+    ringSpin: 2.2,
+    trailColor: 0xc4b5fd,
+    trailStep: 0.23,
+  },
+};
+const MOWER_SKIN_TRAIL_MAX_POINTS = 42;
 
 const keys = {};
 let mowerBodyMaterial = null;
@@ -386,6 +468,14 @@ let mowerFerrariKit = null;
 let mowerBlueKit = null;
 let mowerBlueRotors = [];
 let mowerBlueAuraLight = null;
+let mowerSkinAuraLight = null;
+let mowerSkinRing = null;
+let mowerSkinRingMaterial = null;
+let mowerSkinTrailLine = null;
+let skinFxPulse = 0;
+const mowerSkinTrailPoints = [];
+const mowerSkinTrailLastPos = new THREE.Vector3();
+let mowerSkinTrailInitialized = false;
 let blueAuraPulse = 0;
 const normalizeGameMode = (mode) =>
   mode === "creative" ? "creative" : "classic";
@@ -986,6 +1076,30 @@ window.applySkinVisual = (skinNaam) => {
     : emissiveIntensity;
   mowerBodyMaterial.specular.set(specular);
   mowerBodyMaterial.shininess = isBlue ? shininess + 22 : shininess;
+
+  const fx = SKIN_SPECIAL_EFFECTS[skinNaam] || null;
+  if (mowerSkinAuraLight) {
+    mowerSkinAuraLight.visible = Boolean(fx);
+    if (fx) {
+      mowerSkinAuraLight.color.set(fx.auraColor);
+      mowerSkinAuraLight.intensity = fx.auraBase;
+    }
+  }
+  if (mowerSkinRing) mowerSkinRing.visible = Boolean(fx);
+  if (mowerSkinRingMaterial && fx) {
+    mowerSkinRingMaterial.color.set(fx.ringColor);
+    mowerSkinRingMaterial.opacity = fx.ringOpacity;
+  }
+  if (mowerSkinTrailLine) {
+    mowerSkinTrailLine.visible = Boolean(fx);
+    if (fx && mowerSkinTrailLine.material?.color) {
+      mowerSkinTrailLine.material.color.set(fx.trailColor);
+    }
+    mowerSkinTrailPoints.length = 0;
+    mowerSkinTrailLine.geometry.setFromPoints(mowerSkinTrailPoints);
+    mowerSkinTrailInitialized = false;
+  }
+  skinFxPulse = 0;
 };
 
 window.maakBasicSnapshot = () => ({
@@ -1430,6 +1544,18 @@ window.openShop = () => {
   if (!Number.isFinite(diamanten) || diamanten < 0) diamanten = 0;
   const volgendeRebirtMulti = (verdienMultiplier * REBIRT_BONUS_STEP).toFixed(2);
   const radKost = window.getRadKost();
+  const skinShopHtml = DIAMANT_SKINS_SHOP.map((skin) => {
+    const gekocht = ontgrendeldeSkins.includes(skin.id);
+    const kanKopen = diamanten >= skin.prijs;
+    const knopTekst = gekocht ? "GEKOCHT" : `KOOP (${skin.prijs}D)`;
+    const knopKleur = gekocht ? "#16a34a" : kanKopen ? "#7c3aed" : "#555";
+    const cursor = gekocht || kanKopen ? "pointer" : "default";
+    return `<div style="padding:12px; background:#111827; border:2px solid #374151; border-radius:12px;">
+      <div style="font-size:22px; color:${skin.kleur};">${skin.naam}</div>
+      <div style="font-size:16px; color:#cbd5e1; margin:4px 0 10px 0;">Special FX skin</div>
+      <button onclick="window.koopSkinMetDiamanten('${skin.id}')" ${gekocht ? "disabled" : ""} style="width:100%; padding:10px; background:${knopKleur}; color:white; border:2px solid white; border-radius:10px; font-family:Impact; font-size:18px; cursor:${cursor};">${knopTekst}</button>
+    </div>`;
+  }).join("");
   overlay.innerHTML = `<div style="background:#111; padding:45px; border:8px solid #5dade2; border-radius:30px; text-align:center; min-width:560px; max-width:92vw; max-height:85vh; overflow-y:auto; overflow-x:hidden;">
         <h1 style="color:#85c1e9; font-size:60px; margin:0 0 10px 0;">&#128142; SHOP</h1>
         <p style="font-size:24px; margin:8px 0; color:#2ecc71;">Geld: $${geld.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
@@ -1445,12 +1571,43 @@ window.openShop = () => {
           <button onclick="window.draaiRad()" style="width:100%; padding:16px; background:${diamanten >= radKost ? "#8e44ad" : "#555"}; color:white; border:3px solid white; border-radius:12px; cursor:${diamanten >= radKost ? "pointer" : "default"}; font-family:Impact; font-size:24px;">DRAAI RAD (${radKost}D)</button>
           <p style="font-size:18px; color:#d7bde2; margin:10px 0 0 0;">Mogelijke rewards: Geld, Diamanten, Radius/Speed/Value upgrade</p>
         </div>
+        <div style="margin-top:22px; padding:16px; background:#1f1236; border:3px solid #7c3aed; border-radius:14px;">
+          <div style="font-size:26px; color:#c4b5fd; margin-bottom:10px;"> DIAMANT SKINS</div>
+          <p style="font-size:18px; margin:0 0 12px 0; color:#ddd6fe;">Koop premium skins met speciale effecten.</p>
+          <div style="display:grid; grid-template-columns:repeat(2, minmax(220px, 1fr)); gap:10px;">
+            ${skinShopHtml}
+          </div>
+        </div>
         <button onclick="window.sluit()" style="margin-top:16px; padding:14px 50px; background:#5dade2; color:white; border:none; border-radius:12px; font-family:Impact; font-size:24px; cursor:pointer;">SLUITEN</button>
     </div>`;
 };
 
 window.koopDiamant = () => {
   alert("Diamanten kopen staat uit. Verdien diamanten via Grass Pass.");
+};
+window.koopSkinMetDiamanten = (skinId) => {
+  const id = String(skinId || "").toUpperCase();
+  const skinDef = DIAMANT_SKINS_SHOP.find((skin) => skin.id === id);
+  if (!skinDef) {
+    alert("Deze skin bestaat niet.");
+    return;
+  }
+  if (ontgrendeldeSkins.includes(id)) {
+    alert(`${skinDef.naam} is al gekocht.`);
+    return;
+  }
+  if (diamanten < skinDef.prijs) {
+    alert(`Je hebt ${skinDef.prijs} diamanten nodig voor ${skinDef.naam}.`);
+    return;
+  }
+  diamanten -= skinDef.prijs;
+  ontgrendeldeSkins.push(id);
+  huidigeSkin = id;
+  window.applySkinVisual(huidigeSkin);
+  window.updateUI();
+  window.save(true);
+  alert(`${skinDef.naam} gekocht en geactiveerd!`);
+  window.openShop();
 };
 
 window.koopRebirt = () => {
@@ -1685,7 +1842,7 @@ window.openSkins = () => {
   overlay.style.left = "0";
   overlay.style.pointerEvents = "auto";
   let h = `<div style="background:#111; padding:40px; border:8px solid #3498db; border-radius:30px; text-align:center; max-width:80%; max-height:80vh; overflow-y:auto;"><h1 style="color:#3498db; font-size:50px; margin-bottom:20px;"> SKINS</h1><div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:15px;">`;
-  ["STARTER", "RED", "BLUE", "GOLDEN", ...maanden].forEach((s) => {
+  ["STARTER", "RED", "BLUE", "GOLDEN", ...DIAMANT_SKIN_IDS, ...maanden].forEach((s) => {
     const ok = gameMode === "creative" || ontgrendeldeSkins.includes(s),
       cur = huidigeSkin === s;
     h += `<button class="skinSelectBtn" data-skin="${s}" data-unlocked="${ok ? "1" : "0"}" style="padding:20px; background:${ok ? (cur ? "#2ecc71" : "#333") : "#111"}; color:${ok ? "white" : "#555"}; font-family:Impact; border:${cur ? "4px solid white" : "2px solid #444"}; border-radius:15px; cursor:${ok ? "pointer" : "default"}; font-size:18px;" ${ok ? "" : "disabled"}>${ok ? s : "LOCKED"}</button>`;
@@ -2552,6 +2709,38 @@ mowerBlueAuraLight.position.set(0, 0.8, 0.2);
 mowerBlueAuraLight.visible = false;
 mower.add(mowerBlueAuraLight);
 
+mowerSkinAuraLight = new THREE.PointLight(0xffffff, 1.1, 9.5, 2);
+mowerSkinAuraLight.position.set(0, 0.62, -0.05);
+mowerSkinAuraLight.visible = false;
+mower.add(mowerSkinAuraLight);
+
+mowerSkinRingMaterial = new THREE.MeshBasicMaterial({
+  color: 0xffffff,
+  transparent: true,
+  opacity: 0.35,
+});
+mowerSkinRing = new THREE.Mesh(
+  new THREE.TorusGeometry(0.9, 0.06, 10, 34),
+  mowerSkinRingMaterial,
+);
+mowerSkinRing.rotation.x = Math.PI / 2;
+mowerSkinRing.position.set(0, 0.12, 0.1);
+mowerSkinRing.visible = false;
+mower.add(mowerSkinRing);
+
+mowerSkinTrailLine = new THREE.Line(
+  new THREE.BufferGeometry(),
+  new THREE.LineBasicMaterial({
+    color: 0x93c5fd,
+    transparent: true,
+    opacity: 0.75,
+  }),
+);
+mowerSkinTrailLine.visible = false;
+mowerSkinTrailLine.frustumCulled = false;
+mowerSkinTrailLine.renderOrder = 2;
+scene.add(mowerSkinTrailLine);
+
 mower.position.set(0, 0, 0);
 scene.add(mower, new THREE.AmbientLight(0x404040));
 const light = new THREE.DirectionalLight(0xffffff, 1);
@@ -2844,6 +3033,46 @@ function updateFpsMeter() {
   if (fpsEl) fpsEl.innerText = `FPS: ${fps}`;
 }
 
+function updateMowerSkinFx(deltaSec, mowerIsMoving) {
+  const fx = SKIN_SPECIAL_EFFECTS[huidigeSkin];
+  if (!fx) return;
+  skinFxPulse += deltaSec * fx.pulseSpeed;
+  const pulse01 = 0.5 + Math.sin(skinFxPulse) * 0.5;
+  if (mowerSkinAuraLight && mowerSkinAuraLight.visible) {
+    mowerSkinAuraLight.intensity = fx.auraBase + pulse01 * fx.auraPulse;
+  }
+  if (mowerSkinRing && mowerSkinRing.visible) {
+    const ringScale = fx.ringScaleBase + pulse01 * fx.ringScalePulse;
+    mowerSkinRing.scale.set(ringScale, ringScale, 1);
+    mowerSkinRing.rotation.z += deltaSec * fx.ringSpin;
+    if (mowerSkinRingMaterial) {
+      mowerSkinRingMaterial.opacity = fx.ringOpacity + pulse01 * 0.08;
+    }
+  }
+  if (!mowerSkinTrailLine || !mowerSkinTrailLine.visible || !mowerIsMoving) return;
+  const step = Math.max(0.16, Number(fx.trailStep) || 0.24);
+  const pos = new THREE.Vector3(mower.position.x, 0.06, mower.position.z);
+  if (!mowerSkinTrailInitialized) {
+    mowerSkinTrailPoints.push(pos);
+    mowerSkinTrailLastPos.copy(pos);
+    mowerSkinTrailInitialized = true;
+    mowerSkinTrailLine.geometry.setFromPoints(mowerSkinTrailPoints);
+    return;
+  }
+  const dx = pos.x - mowerSkinTrailLastPos.x;
+  const dz = pos.z - mowerSkinTrailLastPos.z;
+  if (dx * dx + dz * dz < step * step) return;
+  mowerSkinTrailPoints.push(pos);
+  mowerSkinTrailLastPos.copy(pos);
+  if (mowerSkinTrailPoints.length > MOWER_SKIN_TRAIL_MAX_POINTS) {
+    mowerSkinTrailPoints.splice(
+      0,
+      mowerSkinTrailPoints.length - MOWER_SKIN_TRAIL_MAX_POINTS,
+    );
+  }
+  mowerSkinTrailLine.geometry.setFromPoints(mowerSkinTrailPoints);
+}
+
 function animate(nowPerf = performance.now()) {
   requestAnimationFrame(animate);
   const frameDeltaMs = Math.max(0, Math.min(250, nowPerf - lastFrameTime));
@@ -2877,6 +3106,8 @@ function animate(nowPerf = performance.now()) {
   const rijdtVooruit = Boolean(keys["w"] || keys["z"] || keys["arrowup"]);
   const rijdtAchteruit = Boolean(keys["s"] || keys["arrowdown"]);
   const moveDir = (rijdtVooruit ? 1 : 0) + (rijdtAchteruit ? -1 : 0);
+  const prevPosX = mower.position.x;
+  const prevPosZ = mower.position.z;
   if (moveDir !== 0) {
     const yaw = stuurYaw;
     mower.position.x += Math.sin(yaw) * s * moveDir;
@@ -2887,6 +3118,9 @@ function animate(nowPerf = performance.now()) {
     mower.position.x = Math.max(-maxPos, Math.min(maxPos, mower.position.x));
     mower.position.z = Math.max(-maxPos, Math.min(maxPos, mower.position.z));
   }
+  const dxMove = mower.position.x - prevPosX;
+  const dzMove = mower.position.z - prevPosZ;
+  const mowerIsMoving = dxMove * dxMove + dzMove * dzMove > 0.0001;
   if (mowerBlueKit && mowerBlueKit.visible && mowerBlueRotors.length) {
     for (const rotor of mowerBlueRotors) rotor.rotation.z += 0.25 * frameFactor;
   }
@@ -2894,6 +3128,7 @@ function animate(nowPerf = performance.now()) {
     blueAuraPulse += deltaSec * 4.6;
     mowerBlueAuraLight.intensity = 1.05 + Math.sin(blueAuraPulse) * 0.2;
   }
+  updateMowerSkinFx(deltaSec, mowerIsMoving);
   updateFpsMeter();
   updateGroundTiles();
   const maaierRadiusSq = huidigMowerRadius * huidigMowerRadius;
