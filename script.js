@@ -105,6 +105,7 @@ let miniGameVolgendeCheckAt = 0;
 let miniGameCooldownTot = 0;
 let miniGameTimer = null;
 let miniGameActief = false;
+let miniGameAutoTriggerQueued = false;
 let miniGameMarkerPos = 0;
 let miniGameMarkerRichting = 1;
 const MINIGAME_CHECK_INTERVAL_MS = 9000;
@@ -1426,6 +1427,7 @@ window.cleanupMiniGame = () => {
     miniGameTimer = null;
   }
   miniGameActief = false;
+  miniGameAutoTriggerQueued = false;
 };
 
 window.openMiniGame = () => {
@@ -1437,6 +1439,7 @@ window.openMiniGame = () => {
   miniGameKnopZichtbaarTot = 0;
   window.cleanupMiniGame();
   miniGameActief = true;
+  miniGameAutoTriggerQueued = false;
   miniGameRonde = 1;
   miniGameMarkerPos = 0;
   miniGameMarkerRichting = 1;
@@ -1449,7 +1452,8 @@ window.openMiniGame = () => {
       window.cleanupMiniGame();
       return;
     }
-    if (keys["o"]) {
+    if (keys["o"] || miniGameAutoTriggerQueued) {
+      miniGameAutoTriggerQueued = false;
       miniGameMarkerPos = 50;
       window.stopMiniGame();
       return;
@@ -2901,6 +2905,9 @@ const clearMovementKeys = () => {
 };
 window.onkeydown = (e) => {
   const key = e.key.toLowerCase();
+  if (key === "o" && miniGameActief) {
+    miniGameAutoTriggerQueued = true;
+  }
   if (isChatInputGefocust() && CHAT_BLOKKEER_MOVE_KEYS.includes(key)) {
     keys[key] = false;
     return;
