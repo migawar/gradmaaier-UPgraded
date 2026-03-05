@@ -3228,4 +3228,4 @@ setInterval(() => window.save(), 5000);
 window.updateUI();
 window.applySkinVisual(huidigeSkin);
 window.applyMapTheme();
-animate();
+animate();//Z
