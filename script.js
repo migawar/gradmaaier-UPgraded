@@ -2035,6 +2035,8 @@ window.getSaveData = () => ({
   oneindigSpeelveldOnd,
   hellCooldownTot,
   gebruikteRedeemCodes: [...gebruikteRedeemCodes],
+  mowerX: mower.position.x,
+  mowerZ: mower.position.z,
 });
 
 window.applySaveData = (d) => {
@@ -2110,6 +2112,8 @@ window.applySaveData = (d) => {
         .map((code) => String(code).trim().toUpperCase())
         .filter(Boolean)
     : [];
+  mower.position.x = Number.isFinite(d.mowerX) ? d.mowerX : 0;
+  mower.position.z = Number.isFinite(d.mowerZ) ? d.mowerZ : 0;
   window.syncEventMetMaand();
   return true;
 };
@@ -2199,14 +2203,12 @@ window.toggleGoogleLogin = async () => {
 };
 
 window.save = async (silent = false) => {
-  const moetLokaalOpslaan = autoSaveOnd || silent;
-  const moetCloudOpslaan = Boolean(ingelogdeGebruiker && firebaseDb);
-  if (!moetLokaalOpslaan && !moetCloudOpslaan) return;
-
   const data = window.getSaveData();
+  // Sla altijd lokaal op.
   localStorage.setItem(LOCAL_SAVE_KEY, JSON.stringify(data));
 
-  if (moetCloudOpslaan) {
+  // Sla op in de cloud als de speler is ingelogd.
+  if (ingelogdeGebruiker && firebaseDb) {
     try {
       await setDoc(
         getSaveDocRef(ingelogdeGebruiker.uid),
@@ -2223,7 +2225,9 @@ window.save = async (silent = false) => {
     }
   }
 
-  if (autoSaveOnd) {
+  // Toon de "opgeslagen" toast alleen bij de periodieke auto-save,
+  // niet bij de 'stille' saves die op de achtergrond gebeuren.
+  if (autoSaveOnd && !silent) {
     const t = document.getElementById("saveToast");
     if (t) {
       t.style.opacity = 1;
