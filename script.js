@@ -70,6 +70,8 @@ const BASE_TURN_SPEED = 0.045;
 const SPEED_UPGRADE_STEP = 0.01782;
 const RADIUS_UPGRADE_STEP = 0.243;
 const GRASSPASS_DIAMANT_REWARD = 1;
+const DAILY_GIFT_DIAMANT_REWARD = 1;
+const DAILY_GIFT_GELD_REWARD = 250;
 const RAD_BASIS_KOST = 2;
 const RADIUS_PRICE_MULTIPLIER = 1.3;
 const SPEED_PRICE_MULTIPLIER = 1.3;
@@ -89,7 +91,7 @@ const MAX_RADIUS = 50,
 let regrowDelay = 8000,
   gameMode = "classic",
   creativeSpeed = 0.5,
-  autoSaveOnd = false;
+  autoSaveOnd = true;
 let fpsMeterOnd = false;
 let oneindigSpeelveldOnd = false;
 let verdienMultiplier = 1;
@@ -99,6 +101,7 @@ let totaalVerdiendVoorTrofeeen = 0;
 let lichtKleur = "default";
 let huidigeMapId = "CLASSIC";
 let radDraaiCount = 0;
+let dagelijkseCadeauClaimKey = null;
 let radIsSpinning = false;
 let miniGameKnopZichtbaar = false;
 let miniGameVolgendeCheckAt = 0;
@@ -267,6 +270,29 @@ const getHuidigeEventMaandKey = () => {
   const maand = String(nu.getMonth() + 1).padStart(2, "0");
   return `${nu.getFullYear()}-${maand}`;
 };
+const getLokaleDagKey = () => {
+  const nu = new Date();
+  const maand = String(nu.getMonth() + 1).padStart(2, "0");
+  const dag = String(nu.getDate()).padStart(2, "0");
+  return `${nu.getFullYear()}-${maand}-${dag}`;
+};
+const getDagelijksCadeauResterendeTijd = () => {
+  const nu = new Date();
+  const volgendeDag = new Date(
+    nu.getFullYear(),
+    nu.getMonth(),
+    nu.getDate() + 1,
+    0,
+    0,
+    0,
+    0,
+  );
+  const resterendMs = Math.max(0, volgendeDag.getTime() - nu.getTime());
+  const uren = Math.floor(resterendMs / (60 * 60 * 1000));
+  const minuten = Math.floor((resterendMs % (60 * 60 * 1000)) / (60 * 1000));
+  return `${uren}u ${String(minuten).padStart(2, "0")}m`;
+};
+const kanDagelijksCadeauClaimen = () => dagelijkseCadeauClaimKey !== getLokaleDagKey();
 let eventMaandKey = getHuidigeEventMaandKey();
 let spelerResetMaandKey = getHuidigeEventMaandKey();
 
@@ -1965,6 +1991,25 @@ window.toggleAutoSave = () => {
   if (autoSaveOnd) window.save(true);
   window.openSettings();
 };
+window.claimDagelijksCadeau = async () => {
+  if (!kanDagelijksCadeauClaimen()) {
+    alert(
+      `Je hebt je dagelijkse cadeau al geclaimd. Nieuw cadeau over ${getDagelijksCadeauResterendeTijd()}.`,
+    );
+    return;
+  }
+  dagelijkseCadeauClaimKey = getLokaleDagKey();
+  diamanten += DAILY_GIFT_DIAMANT_REWARD;
+  geld += DAILY_GIFT_GELD_REWARD;
+  totaalVerdiend += DAILY_GIFT_GELD_REWARD;
+  totaalVerdiendVoorTrofeeen += DAILY_GIFT_GELD_REWARD;
+  window.updateUI();
+  await window.save(true);
+  window.openSettings();
+  alert(
+    `Dagelijks cadeau geclaimd: +${DAILY_GIFT_DIAMANT_REWARD} diamant en +$${DAILY_GIFT_GELD_REWARD.toLocaleString()}.`,
+  );
+};
 
 window.toggleLichtKleur = () => {
   lichtKleur = lichtKleur === "hemelsblauw" ? "default" : "hemelsblauw";
@@ -2030,6 +2075,7 @@ window.getSaveData = () => ({
   lichtKleur,
   huidigeMapId,
   radDraaiCount,
+  dagelijkseCadeauClaimKey,
   creativeSpeed,
   fpsMeterOnd,
   oneindigSpeelveldOnd,
@@ -2085,7 +2131,7 @@ window.applySaveData = (d) => {
     /^\d{4}-\d{2}$/.test(d.spelerResetMaandKey)
       ? d.spelerResetMaandKey
       : getHuidigeEventMaandKey();
-  autoSaveOnd = Boolean(d.autoSaveOnd);
+  autoSaveOnd = typeof d.autoSaveOnd === "boolean" ? d.autoSaveOnd : true;
   gameMode = normalizeGameMode(d.gameMode);
   actieveOpdracht = d.actieveOpdracht || null;
   eventOpdracht = d.eventOpdracht || null;
@@ -2103,6 +2149,11 @@ window.applySaveData = (d) => {
     d.lichtKleur === "blue" ? "hemelsblauw" : (d.lichtKleur ?? "default");
   huidigeMapId = normalizeMapId(d.huidigeMapId);
   radDraaiCount = Number.isFinite(d.radDraaiCount) ? d.radDraaiCount : 0;
+  dagelijkseCadeauClaimKey =
+    typeof d.dagelijkseCadeauClaimKey === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(d.dagelijkseCadeauClaimKey)
+      ? d.dagelijkseCadeauClaimKey
+      : null;
   creativeSpeed = Number.isFinite(d.creativeSpeed) ? d.creativeSpeed : 0.5;
   fpsMeterOnd = Boolean(d.fpsMeterOnd);
   oneindigSpeelveldOnd = Boolean(d.oneindigSpeelveldOnd);
@@ -2277,6 +2328,10 @@ window.openSettings = () => {
   const accountKnopTekst = ingelogdeGebruiker ? "UITLOGGEN" : "INLOGGEN MET GOOGLE";
   const accountKnopKleur = ingelogdeGebruiker ? "#e67e22" : "#4285f4";
   const actieveMap = getMapById(huidigeMapId);
+  const cadeauClaimbaar = kanDagelijksCadeauClaimen();
+  const cadeauKnopTekst = cadeauClaimbaar
+    ? `DAGELIJKS CADEAU: CLAIM +${DAILY_GIFT_DIAMANT_REWARD} DIAMANT +$${DAILY_GIFT_GELD_REWARD}`
+    : `DAGELIJKS CADEAU: OVER ${getDagelijksCadeauResterendeTijd()}`;
   overlay.style.left = "0";
   overlay.style.pointerEvents = "auto";
   overlay.innerHTML = `<div id="settingsPanel" style="background:#111; padding:60px; border:8px solid white; border-radius:30px; text-align:center; max-width:92vw; max-height:85vh; overflow-y:auto; overflow-x:hidden;">
@@ -2289,6 +2344,7 @@ window.openSettings = () => {
         <button onclick="window.openMapSelect()" style="width:400px; padding:18px; background:#2563eb; color:white; font-family:Impact; font-size:24px; cursor:pointer; border:3px solid white; border-radius:15px; margin-bottom:10px;">MAP: ${actieveMap.naam}</button><br>
         <div style="width:400px; padding:12px 16px; margin:0 auto 10px; background:#222; border:2px solid #555; border-radius:15px; color:#ddd; font-family:Impact; font-size:20px;">ACCOUNT: ${accountNaam}</div>
         <button onclick="window.toggleGoogleLogin()" style="width:400px; padding:18px; background:${accountKnopKleur}; color:white; font-family:Impact; font-size:24px; cursor:pointer; border:3px solid white; border-radius:15px; margin-bottom:10px;">${accountKnopTekst}</button><br>
+        <button onclick="window.claimDagelijksCadeau()" style="width:400px; padding:16px; background:${cadeauClaimbaar ? "#f59e0b" : "#374151"}; color:white; font-family:Impact; font-size:21px; cursor:${cadeauClaimbaar ? "pointer" : "not-allowed"}; border:3px solid white; border-radius:15px; margin-bottom:10px;">${cadeauKnopTekst}</button><br>
         <button onclick="window.openInfoPage()" style="width:400px; padding:16px; background:#1f2937; color:#93c5fd; font-family:Impact; font-size:24px; cursor:pointer; border:3px solid white; border-radius:15px; margin-bottom:10px;">INFO PAGINA</button><br>
         <button onclick="window.openResetConfirm()" style="width:400px; padding:15px; background:#c0392b; color:white; font-family:Impact; font-size:22px; cursor:pointer; border:4px solid white; border-radius:15px;"> RESET GAME </button><br>
         <button onclick="window.sluit()" style="padding:15px 80px; background:#2ecc71; color:white; font-family:Impact; font-size:30px; border:none; border-radius:15px; cursor:pointer; margin-top:20px;">SLUITEN</button></div>`;
@@ -3467,7 +3523,13 @@ if (!isGeladen || !actieveOpdracht) window.genereerMissie(false);
 if (!isGeladen || !eventOpdracht) window.genereerMissie(true);
 window.initFirebase();
 
-setInterval(() => window.save(), 5000);
+setInterval(() => {
+  if (!autoSaveOnd) return;
+  window.save();
+}, 5000);
+window.addEventListener("beforeunload", () => {
+  window.save(true);
+});
 window.updateUI();
 window.applySkinVisual(huidigeSkin);
 window.applyMapTheme();
