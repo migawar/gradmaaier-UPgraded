@@ -123,6 +123,7 @@ let basicStateVoorCreative = null;
 let gebruikteRedeemCodes = [];
 const CREATIVE_BACKUP_KEY = "grassMasterCreativeBackupV1";
 const LOCAL_SAVE_KEY = "grassMasterSaveV2";
+const LOCAL_SAVE_BACKUP_KEY = "grassMasterSaveV2_backup";
 const PRELOGIN_BACKUP_KEY = "grassMasterPreLoginSaveV1";
 const FIREBASE_SAVE_COLLECTION = "saves";
 const FIREBASE_CHAT_COLLECTION = "global_chat";
@@ -2255,8 +2256,22 @@ window.toggleGoogleLogin = async () => {
 
 window.save = async (silent = false) => {
   const data = window.getSaveData();
-  // Sla altijd lokaal op.
-  localStorage.setItem(LOCAL_SAVE_KEY, JSON.stringify(data));
+  let json = "";
+  try {
+    json = JSON.stringify(data);
+  } catch (err) {
+    console.error("Save serialiseren mislukt:", err);
+    return;
+  }
+
+  // Sla altijd lokaal op (primair + backup).
+  try {
+    localStorage.setItem(LOCAL_SAVE_KEY, json);
+    localStorage.setItem(LOCAL_SAVE_BACKUP_KEY, json);
+  } catch (err) {
+    console.error("Lokale save mislukt:", err);
+    return;
+  }
 
   // Sla op in de cloud als de speler is ingelogd.
   if (ingelogdeGebruiker && firebaseDb) {
@@ -2288,17 +2303,30 @@ window.save = async (silent = false) => {
 };
 
 window.load = () => {
-  const saved = localStorage.getItem(LOCAL_SAVE_KEY);
-  if (!saved) return false;
+  const probeer = (raw) => {
+    if (!raw) return false;
+    try {
+      return window.applySaveData(JSON.parse(raw));
+    } catch {
+      return false;
+    }
+  };
+  const primary = localStorage.getItem(LOCAL_SAVE_KEY);
+  if (probeer(primary)) return true;
+
+  const backup = localStorage.getItem(LOCAL_SAVE_BACKUP_KEY);
+  if (!probeer(backup)) return false;
+
+  // Herstel primaire key vanuit backup na corrupte/lege primaire save.
   try {
-    return window.applySaveData(JSON.parse(saved));
-  } catch {
-    return false;
-  }
+    localStorage.setItem(LOCAL_SAVE_KEY, backup);
+  } catch {}
+  return true;
 };
 
 window.finalReset = async () => {
   localStorage.removeItem(LOCAL_SAVE_KEY);
+  localStorage.removeItem(LOCAL_SAVE_BACKUP_KEY);
   localStorage.removeItem(CREATIVE_BACKUP_KEY);
   if (firebaseDb && ingelogdeGebruiker) {
     try {
@@ -3089,6 +3117,7 @@ let frameAccumulatorMs = 0;
 let fpsMeterFrames = 0;
 let fpsMeterLastSampleAt = performance.now();
 let fpsMeterEl = null;
+let laatsteSnelleAutoSaveAt = 0;
 let grassIndex = 0;
 for (let x = 0; x < grassPerSide; x++) {
   for (let z = 0; z < grassPerSide; z++) {
@@ -3168,6 +3197,11 @@ function cutGrassAtIndex(i, now) {
     totaalVerdiend += opbrengst;
     totaalGemaaid++;
     uiDirty = true;
+    // Extra fallback: tijdens actief spelen geregeld tussentijds opslaan.
+    if (autoSaveOnd && now - laatsteSnelleAutoSaveAt >= 1500) {
+      laatsteSnelleAutoSaveAt = now;
+      window.save(true);
+    }
   }
   return true;
 }
