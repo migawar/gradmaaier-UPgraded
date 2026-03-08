@@ -2047,9 +2047,31 @@ window.showSaveToast = (text = "GAME OPGESLAGEN...", color = "rgba(255,255,255,0
 };
 window.manualSave = async () => {
   const gelukt = await window.save(true);
+  const saveBtn = document.getElementById("saveGameBtn");
   if (gelukt) {
+    if (saveBtn) {
+      const tijd = new Date().toLocaleTimeString("nl-NL", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+      saveBtn.textContent = `OPGESLAGEN ${tijd}`;
+      saveBtn.style.background = "#22c55e";
+      setTimeout(() => {
+        saveBtn.textContent = "SPEL OPSLAAN";
+        saveBtn.style.background = "#16a34a";
+      }, 1800);
+    }
     window.showSaveToast("GAME OPGESLAGEN...");
   } else {
+    if (saveBtn) {
+      saveBtn.textContent = "OPSLAAN MISLUKT";
+      saveBtn.style.background = "#dc2626";
+      setTimeout(() => {
+        saveBtn.textContent = "SPEL OPSLAAN";
+        saveBtn.style.background = "#16a34a";
+      }, 1800);
+    }
     window.showSaveToast("OPSLAAN MISLUKT", "#f87171");
   }
 };
