@@ -2173,12 +2173,16 @@ window.openResetConfirm = () => {
         <button onclick="window.openSettings()" style="width:450px; padding:20px; background:rgba(0,0,0,0.3); color:white; font-family:Impact; font-size:24px; cursor:pointer; border:2px solid white; border-radius:20px;">NEE, TERUG</button></div>`;
 };
 
+let settingsAlertsShown = false;
 window.openSettings = () => {
-  alert("Mensen, binnenkort zal deze game ook in het engels, duits, frans en spaans beschikbaar zijn. De updates zullen ook binnekort weer hervat worden. Veel plezier.")
-  alert("Folks, soon this game will also be available in English, German, French and Spanish. The updates will also resume soon. Have fun.")
-  alert("Leute, bald wird dieses Spiel auch auf Englisch, Deutsch, Französisch und Spanisch verfügbar sein. Auch die Updates werden bald wieder aufgenommen. Viel Spaß.")
-  alert("Mes amis, bientôt ce jeu sera également disponible en anglais, allemand, français et espagnol. Les mises à jour reprendront également prochainement. Amusez-vous.")
-  alert("Amigos, pronto este juego también estará disponible en inglés, alemán, francés y español. Las actualizaciones también se reanudarán pronto. Divertirse.")
+  if (!settingsAlertsShown) {
+    alert("Mensen, binnenkort zal deze game ook in het engels, duits, frans en spaans beschikbaar zijn. De updates zullen ook binnekort weer hervat worden. Veel plezier.")
+    alert("Folks, soon this game will also be available in English, German, French and Spanish. The updates will also resume soon. Have fun.")
+    alert("Leute, bald wird dieses Spiel ook op Englisch, Deutsch, Französisch und Spanisch verfügbar sein. Auch die Updates werden bald wieder aufgenommen. Viel Spaß.")
+    alert("Mes amis, bientôt ce jeu sera également disponible en anglais, allemand, français et espagnol. Les mises à jour reprendront également prochainement. Amusez-vous.")
+    alert("Amigos, pronto este juego también estará disponible en inglés, alemán, francés y español. Las actualizaciones ook binnekort weer hervat worden. Divertirse.")
+    settingsAlertsShown = true;
+  }
   const accountNaam = getAccountLabel();
   const accountKnopTekst = ingelogdeGebruiker ? "UITLOGGEN" : "INLOGGEN MET GOOGLE";
   const accountKnopKleur = ingelogdeGebruiker ? "#e67e22" : "#4285f4";
