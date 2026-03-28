@@ -138,7 +138,6 @@ const CHAT_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 const CHAT_CLEANUP_BATCH_SIZE = 100;
 const ONLINE_SPELER_WINDOW_MS = 45 * 1000;
 const ONLINE_SPELER_REFRESH_MS = 20 * 1000;
-const SERVER_VERLOOP_MS = 24 * 60 * 60 * 1000;
 const HELL_OVERLEEF_BELONING_MS = 5 * 60 * 1000;
 const HELL_DEATH_SCREEN_MS = 10 * 1000;
 const HELL_SPAWN_GRACE_MS = 2000;
@@ -390,14 +389,6 @@ const getTrofeeBeloning = (trofeeLevel) =>
 const isOneindigSpeelveldActief = () =>
   gameMode === "creative" || oneindigSpeelveldOnd;
 const isHellServerActief = () => actieveServer === "hell";
-const getServerResterendMs = (now = Date.now()) =>
-  Math.max(0, SERVER_VERLOOP_MS - (now - serverGestartOpMs));
-const formatResterendeTijd = (ms) => {
-  const totaalSec = Math.max(0, Math.ceil(ms / 1000));
-  const uren = Math.floor(totaalSec / 3600);
-  const minuten = Math.floor((totaalSec % 3600) / 60);
-  return `${uren}u ${String(minuten).padStart(2, "0")}m`;
-};
 const getChatDisplayName = () => {
   if (ingelogdeGebruiker?.displayName?.trim()) {
     return ingelogdeGebruiker.displayName.trim().slice(0, 24);
@@ -1996,12 +1987,6 @@ window.applySaveData = (d) => {
     ? d.hellRunGestartOpMs
     : 0;
   hellDiamantBeloningGekregen = Boolean(d.hellDiamantBeloningGekregen);
-  if (Date.now() - serverGestartOpMs >= SERVER_VERLOOP_MS) {
-    actieveServer = "classic";
-    serverGestartOpMs = Date.now();
-    hellRunGestartOpMs = 0;
-    hellDiamantBeloningGekregen = false;
-  }
   if (isHellServerActief()) {
     gameMode = "classic";
     oneindigSpeelveldOnd = false;
@@ -2185,7 +2170,6 @@ window.openSettings = () => {
   const accountNaam = getAccountLabel();
   const accountKnopTekst = ingelogdeGebruiker ? "UITLOGGEN" : "INLOGGEN MET GOOGLE";
   const accountKnopKleur = ingelogdeGebruiker ? "#e67e22" : "#4285f4";
-  const serverTot = formatResterendeTijd(getServerResterendMs());
   overlay.style.left = "0";
   overlay.style.pointerEvents = "auto";
   overlay.innerHTML = `<div style="width:100%; height:100%; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; display:flex; align-items:flex-start; justify-content:center; padding:20px 0; box-sizing:border-box;">
@@ -2198,7 +2182,6 @@ window.openSettings = () => {
         <h1 style="font-size:60px; margin-bottom:30px;">INSTELLINGEN</h1>
         <button onclick="window.toggleAutoSave()" style="padding:20px; background:${autoSaveOnd ? "#2ecc71" : "#e74c3c"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">AUTO-SAVE: ${autoSaveOnd ? "AAN" : "UIT"}</button><br>
         <button onclick="window.toggleServer()" style="padding:20px; background:${isHellServerActief() ? "#b91c1c" : "#374151"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:6px;">SERVER: ${actieveServer.toUpperCase()}</button><br>
-        <div style="font-size:18px; color:#9ca3af; margin-bottom:10px;">SERVER VERLOOPT OVER: ${serverTot}</div>
         <button onclick="window.toggleGameMode()" style="padding:20px; background:${gameMode === "creative" ? "#f1c40f" : "#333"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">MODE: ${gameMode.toUpperCase()}</button><br>
         <button onclick="window.toggleOneindigSpeelveld()" style="padding:20px; background:${oneindigSpeelveldOnd ? "#2ecc71" : "#444"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">ONEINDIG SPEELVELD: ${oneindigSpeelveldOnd ? "AAN" : "UIT"}</button><br>
         <button onclick="window.toggleLichtKleur()" style="padding:20px; background:${lichtKleur === "hemelsblauw" ? "#87ceeb" : "#333"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">ACHTERGROND: ${lichtKleur === "hemelsblauw" ? "HEMELSBLAUW" : "STANDAARD"}</button><br>
