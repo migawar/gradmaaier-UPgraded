@@ -2514,7 +2514,7 @@ const cameraOffsetWorld = new THREE.Vector3();
 const cameraSwayWorld = new THREE.Vector3();
 
 // --- Billboards (om de X "meter" rijden) ---
-const BILLBOARD_EVERY_METERS = 8;
+const BILLBOARD_EVERY_METERS = 100;
 const BILLBOARD_MAX = 300;
 const BILLBOARD_TELEPORT_RESET_DISTANCE = BILLBOARD_EVERY_METERS * 6;
 const BILLBOARD_Y = 2.2;
