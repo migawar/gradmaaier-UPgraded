@@ -70,13 +70,13 @@ const BASE_TURN_SPEED = 0.045;
 const SPEED_UPGRADE_STEP = 0.01782;
 const RADIUS_UPGRADE_STEP = 0.243;
 const GRASSPASS_DIAMANT_REWARD = 1;
-const DAILY_GIFT_DIAMANT_REWARD = 1;
-const DAILY_GIFT_GELD_REWARD = 250;
 const RAD_BASIS_KOST = 2;
 const RADIUS_PRICE_MULTIPLIER = 1.3;
 const SPEED_PRICE_MULTIPLIER = 1.3;
 const VALUE_PRICE_MULTIPLIER = 1.35;
 const SHOP_UPGRADE_VASTE_KOST = 1;
+const SHOP_SKIN_KOST = 5;
+const SHOP_SKINS = ["JANUARI", "FEBRUARI", "MAART"];
 let grasWaarde = BASE_GRASS_VALUE,
   huidigeSnelheid = BASE_SPEED,
   huidigMowerRadius = 1.3;
@@ -91,17 +91,22 @@ const MAX_RADIUS = 50,
 let regrowDelay = 8000,
   gameMode = "classic",
   creativeSpeed = 0.5,
-  autoSaveOnd = true;
+  autoSaveOnd = false;
 let fpsMeterOnd = false;
 let oneindigSpeelveldOnd = false;
+let actieveServer = "classic";
+let serverGestartOpMs = Date.now();
+let hellRunGestartOpMs = 0;
+let hellDiamantBeloningGekregen = false;
+let hellDeathActief = false;
+let hellDeathTotMs = 0;
+let hellSpawnGraceTotMs = 0;
 let verdienMultiplier = 1;
 let rebirtCount = 0;
 let totaalSpeeltijdSec = 0;
 let totaalVerdiendVoorTrofeeen = 0;
 let lichtKleur = "default";
-let huidigeMapId = "CLASSIC";
 let radDraaiCount = 0;
-let dagelijkseCadeauClaimKey = null;
 let radIsSpinning = false;
 let miniGameKnopZichtbaar = false;
 let miniGameVolgendeCheckAt = 0;
@@ -110,11 +115,11 @@ let miniGameTimer = null;
 let miniGameActief = false;
 let miniGameMarkerPos = 0;
 let miniGameMarkerRichting = 1;
-const MINIGAME_CHECK_INTERVAL_MS = 9000;
-const MINIGAME_KANS = 0.45;
-const MINIGAME_COOLDOWN_MS = 18000;
+const MINIGAME_CHECK_INTERVAL_MS = 15000;
+const MINIGAME_KANS = 0.18;
+const MINIGAME_COOLDOWN_MS = 45000;
 const MINIGAME_REWARD_DIAMANT = 1;
-const MINIGAME_KNOP_DUUR_MS = 60000;
+const MINIGAME_KNOP_DUUR_MS = 30000;
 const MINIGAME_RONDES = 3;
 const MINIGAME_ZONE_BREEDTES = [24, 16, 10];
 let miniGameRonde = 1;
@@ -123,7 +128,6 @@ let basicStateVoorCreative = null;
 let gebruikteRedeemCodes = [];
 const CREATIVE_BACKUP_KEY = "grassMasterCreativeBackupV1";
 const LOCAL_SAVE_KEY = "grassMasterSaveV2";
-const LOCAL_SAVE_BACKUP_KEY = "grassMasterSaveV2_backup";
 const PRELOGIN_BACKUP_KEY = "grassMasterPreLoginSaveV1";
 const FIREBASE_SAVE_COLLECTION = "saves";
 const FIREBASE_CHAT_COLLECTION = "global_chat";
@@ -134,6 +138,15 @@ const CHAT_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 const CHAT_CLEANUP_BATCH_SIZE = 100;
 const ONLINE_SPELER_WINDOW_MS = 45 * 1000;
 const ONLINE_SPELER_REFRESH_MS = 20 * 1000;
+const SERVER_VERLOOP_MS = 24 * 60 * 60 * 1000;
+const HELL_OVERLEEF_BELONING_MS = 5 * 60 * 1000;
+const HELL_DEATH_SCREEN_MS = 10 * 1000;
+const HELL_SPAWN_GRACE_MS = 2000;
+const HELL_FIRE_HIT_RADIUS = 2.2;
+const HELL_CAR_HIT_RADIUS = 2.05;
+const INFINITE_ZICHT_CHECK_INTERVAL_MS = 700;
+const INFINITE_ZICHT_RADIUS = 19;
+const INFINITE_RESPAWN_BATCH = 220;
 const TROFEE_DREMPELS = [
   100,
   1000,
@@ -158,68 +171,6 @@ const TROFEE_BELONINGEN = [
   350000000,
   2500000000,
 ];
-const MAP_PRESETS = [
-  {
-    id: "CLASSIC",
-    naam: "CLASSIC",
-    sky: 0x222222,
-    ground: 0x2f8a2f,
-    grass: 0x008000,
-    fog: null,
-  },
-  {
-    id: "VOLCANO",
-    naam: "VOLCANO",
-    sky: 0x1a1010,
-    ground: 0x3d2b2b,
-    grass: 0x6a3b3b,
-    fog: { color: 0x2a1818, near: 35, far: 180 },
-  },
-  {
-    id: "DESERT",
-    naam: "DESERT",
-    sky: 0xd8b26a,
-    ground: 0xc89b52,
-    grass: 0xb28947,
-    fog: { color: 0xd2b678, near: 50, far: 220 },
-  },
-  {
-    id: "SNOW",
-    naam: "SNOW",
-    sky: 0x9fc4e6,
-    ground: 0xc8d7e6,
-    grass: 0xdce8f3,
-    fog: { color: 0xcad9e8, near: 40, far: 210 },
-  },
-  {
-    id: "NEON_CITY",
-    naam: "NEON CITY",
-    sky: 0x0b1020,
-    ground: 0x1f2a46,
-    grass: 0x284777,
-    fog: { color: 0x101b33, near: 55, far: 230 },
-  },
-  {
-    id: "HELL",
-    naam: "HELL",
-    sky: 0x2b0505,
-    ground: 0x1a0505,
-    grass: 0x4a0a0a,
-    fog: { color: 0x2b0505, near: 15, far: 100 },
-  },
-];
-const DIAMANT_SKINS_SHOP = [
-  { id: "OBSIDIAN", naam: "OBSIDIAN", prijs: 15, kleur: "#111827" },
-  { id: "NEON", naam: "NEON", prijs: 20, kleur: "#22d3ee" },
-  { id: "VOID", naam: "VOID", prijs: 25, kleur: "#7c3aed" },
-];
-const DIAMANT_SKIN_IDS = DIAMANT_SKINS_SHOP.map((skin) => skin.id);
-const normalizeMapId = (rawId) => {
-  const id = String(rawId ?? "").trim().toUpperCase();
-  return MAP_PRESETS.some((map) => map.id === id) ? id : "CLASSIC";
-};
-const getMapById = (mapId) =>
-  MAP_PRESETS.find((map) => map.id === normalizeMapId(mapId)) || MAP_PRESETS[0];
 const firebaseConfig = {
   apiKey: "AIzaSyA0ukZ0I5xK3XWdeRc3cEckLq-M1Eu05RM",
   authDomain: "grasmaaier-accaunts.firebaseapp.com",
@@ -271,29 +222,6 @@ const getHuidigeEventMaandKey = () => {
   const maand = String(nu.getMonth() + 1).padStart(2, "0");
   return `${nu.getFullYear()}-${maand}`;
 };
-const getLokaleDagKey = () => {
-  const nu = new Date();
-  const maand = String(nu.getMonth() + 1).padStart(2, "0");
-  const dag = String(nu.getDate()).padStart(2, "0");
-  return `${nu.getFullYear()}-${maand}-${dag}`;
-};
-const getDagelijksCadeauResterendeTijd = () => {
-  const nu = new Date();
-  const volgendeDag = new Date(
-    nu.getFullYear(),
-    nu.getMonth(),
-    nu.getDate() + 1,
-    0,
-    0,
-    0,
-    0,
-  );
-  const resterendMs = Math.max(0, volgendeDag.getTime() - nu.getTime());
-  const uren = Math.floor(resterendMs / (60 * 60 * 1000));
-  const minuten = Math.floor((resterendMs % (60 * 60 * 1000)) / (60 * 1000));
-  return `${uren}u ${String(minuten).padStart(2, "0")}m`;
-};
-const kanDagelijksCadeauClaimen = () => dagelijkseCadeauClaimKey !== getLokaleDagKey();
 let eventMaandKey = getHuidigeEventMaandKey();
 let spelerResetMaandKey = getHuidigeEventMaandKey();
 
@@ -303,18 +231,12 @@ let actieveOpdracht = null,
   eventOpdracht = null;
 let rewardKlaar = false,
   eventRewardKlaar = false;
-let huidigeSkin = "STARTER",
-  ontgrendeldeSkins = ["STARTER"];
+let huidigeSkin = "RED",
+  ontgrendeldeSkins = ["RED"];
 
 const alleSkinKleuren = {
-  STARTER: 0x34d399,
   RED: 0xff0000,
   BLUE: 0x0000ff,
-  GOLDEN: 0xdc2626,
-  "THE JOKER": 0x39ff14,
-  OBSIDIAN: 0x111827,
-  NEON: 0x22d3ee,
-  VOID: 0x7c3aed,
   JANUARI: 0xffffff,
   FEBRUARI: 0xffc0cb,
   MAART: 0xffd700,
@@ -329,48 +251,11 @@ const alleSkinKleuren = {
   DECEMBER: 0x8b0000,
 };
 const skinVisualOverrides = {
-  STARTER: {
-    emissive: 0x0f3f33,
-    emissiveIntensity: 0.28,
-    specular: 0xd1fae5,
-    shininess: 85,
-  },
   BLUE: {
     emissive: 0x0f2f8f,
     emissiveIntensity: 0.42,
     specular: 0xd6e4ff,
     shininess: 90,
-  },
-  GOLDEN: {
-    emissive: 0x5b0d12,
-    emissiveIntensity: 0.34,
-    specular: 0xffd6d6,
-    shininess: 165,
-  },
-  "THE JOKER": {
-    color: 0x39ff14,
-    emissive: 0x3f005a,
-    emissiveIntensity: 0.9,
-    specular: 0xe9d5ff,
-    shininess: 220,
-  },
-  OBSIDIAN: {
-    emissive: 0x04070f,
-    emissiveIntensity: 0.48,
-    specular: 0x98a2b3,
-    shininess: 120,
-  },
-  NEON: {
-    emissive: 0x0f5f66,
-    emissiveIntensity: 0.55,
-    specular: 0xd9fbff,
-    shininess: 115,
-  },
-  VOID: {
-    emissive: 0x220f53,
-    emissiveIntensity: 0.62,
-    specular: 0xe3d3ff,
-    shininess: 135,
   },
   JANUARI: {
     emissive: 0x6f6f8a,
@@ -446,96 +331,19 @@ const skinVisualOverrides = {
     shininess: 88,
   },
 };
-const SKIN_SPECIAL_EFFECTS = {
-  GOLDEN: {
-    auraColor: 0xf97316,
-    auraBase: 1.2,
-    auraPulse: 0.34,
-    pulseSpeed: 5.2,
-    ringColor: 0xffedd5,
-    ringOpacity: 0.4,
-    ringScaleBase: 1.02,
-    ringScalePulse: 0.11,
-    ringSpin: 2.8,
-    trailColor: 0xfda4af,
-    trailStep: 0.22,
-  },
-  "THE JOKER": {
-    auraColor: 0x39ff14,
-    auraBase: 1.45,
-    auraPulse: 0.75,
-    pulseSpeed: 9.4,
-    ringColor: 0xff00ff,
-    ringOpacity: 0.62,
-    ringScaleBase: 1.08,
-    ringScalePulse: 0.22,
-    ringSpin: 4.9,
-    trailColor: 0x00ffff,
-    trailStep: 0.12,
-  },
-  OBSIDIAN: {
-    auraColor: 0x6b7280,
-    auraBase: 1.05,
-    auraPulse: 0.26,
-    pulseSpeed: 3.7,
-    ringColor: 0x94a3b8,
-    ringOpacity: 0.35,
-    ringScaleBase: 1.03,
-    ringScalePulse: 0.08,
-    ringSpin: 1.9,
-    trailColor: 0x9ca3af,
-    trailStep: 0.25,
-  },
-  NEON: {
-    auraColor: 0x22d3ee,
-    auraBase: 1.16,
-    auraPulse: 0.33,
-    pulseSpeed: 6,
-    ringColor: 0x67e8f9,
-    ringOpacity: 0.46,
-    ringScaleBase: 1.01,
-    ringScalePulse: 0.08,
-    ringSpin: 2.8,
-    trailColor: 0x22d3ee,
-    trailStep: 0.2,
-  },
-  VOID: {
-    auraColor: 0x7c3aed,
-    auraBase: 1.18,
-    auraPulse: 0.4,
-    pulseSpeed: 4.1,
-    ringColor: 0xa78bfa,
-    ringOpacity: 0.42,
-    ringScaleBase: 1.03,
-    ringScalePulse: 0.1,
-    ringSpin: 2.2,
-    trailColor: 0xc4b5fd,
-    trailStep: 0.23,
-  },
-};
-const MOWER_SKIN_TRAIL_MAX_POINTS = 42;
 
 const keys = {};
 let mowerBodyMaterial = null;
 let mowerDetailedModel = null;
 let mowerRedBlock = null;
-let mowerStarterKit = null;
-let mowerFerrariKit = null;
 let mowerBlueKit = null;
 let mowerBlueRotors = [];
 let mowerBlueAuraLight = null;
-let mowerSkinAuraLight = null;
-let mowerSkinRing = null;
-let mowerCannon = null;
-let mowerSkinRingMaterial = null;
-let mowerSkinTrailLine = null;
-let skinFxPulse = 0;
-const mowerSkinTrailPoints = [];
-const mowerSkinTrailLastPos = new THREE.Vector3();
-let mowerSkinTrailInitialized = false;
 let blueAuraPulse = 0;
 const normalizeGameMode = (mode) =>
   mode === "creative" ? "creative" : "classic";
+const normalizeServerId = (server) =>
+  server === "hell" ? "hell" : "classic";
 const getSaveDocRef = (uid) =>
   doc(firebaseDb, FIREBASE_SAVE_COLLECTION, String(uid));
 const escapeHtml = (value) =>
@@ -581,6 +389,15 @@ const getTrofeeBeloning = (trofeeLevel) =>
   TROFEE_BELONINGEN[Math.max(0, Math.min(TROFEE_BELONINGEN.length - 1, trofeeLevel - 1))];
 const isOneindigSpeelveldActief = () =>
   gameMode === "creative" || oneindigSpeelveldOnd;
+const isHellServerActief = () => actieveServer === "hell";
+const getServerResterendMs = (now = Date.now()) =>
+  Math.max(0, SERVER_VERLOOP_MS - (now - serverGestartOpMs));
+const formatResterendeTijd = (ms) => {
+  const totaalSec = Math.max(0, Math.ceil(ms / 1000));
+  const uren = Math.floor(totaalSec / 3600);
+  const minuten = Math.floor((totaalSec % 3600) / 60);
+  return `${uren}u ${String(minuten).padStart(2, "0")}m`;
+};
 const getChatDisplayName = () => {
   if (ingelogdeGebruiker?.displayName?.trim()) {
     return ingelogdeGebruiker.displayName.trim().slice(0, 24);
@@ -768,7 +585,7 @@ const subscribeChat = () => {
     },
   );
 };
-window.sendChatMessage = async (customText = null) => {
+window.sendChatMessage = async () => {
   if (!firebaseDb) {
     setChatStatus("Firebase niet klaar", "#f87171");
     return;
@@ -777,7 +594,7 @@ window.sendChatMessage = async (customText = null) => {
     setChatStatus("Log in om te chatten", "#f59e0b");
     return;
   }
-  const raw = customText ?? (chatInputEl?.value ?? "");
+  const raw = chatInputEl?.value ?? "";
   const text = raw.trim();
   if (!text) return;
   const safeText = text.slice(0, CHAT_MAX_BERICHT_LENGTE);
@@ -788,7 +605,7 @@ window.sendChatMessage = async (customText = null) => {
       uid: String(ingelogdeGebruiker.uid || ""),
       createdAt: serverTimestamp(),
     });
-    if (!customText && chatInputEl) chatInputEl.value = "";
+    chatInputEl.value = "";
     setChatStatus("Verzonden", "#22c55e");
   } catch (err) {
     console.error("Bericht verzenden mislukt:", err);
@@ -907,11 +724,15 @@ const overlay = document.createElement("div");
 overlay.style.cssText =
   "position:fixed; top:0; left:-100%; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:10000; transition:0.3s; display:flex; align-items:center; justify-content:center; pointer-events:none; color:white; font-family:Impact;";
 document.body.appendChild(overlay);
-
-const damageOverlay = document.createElement("div");
-damageOverlay.style.cssText =
-  "position:fixed; top:0; left:0; width:100%; height:100%; background:red; opacity:0; pointer-events:none; z-index:9998; transition:opacity 0.1s;";
-document.body.appendChild(damageOverlay);
+const hellDeathOverlay = document.createElement("div");
+hellDeathOverlay.style.cssText =
+  "position:fixed; inset:0; background:#000; z-index:10001; display:none; align-items:center; justify-content:center; flex-direction:column; pointer-events:auto; font-family:Impact; color:#ef4444; text-shadow:0 0 20px #7f1d1d;";
+hellDeathOverlay.innerHTML = `
+  <div style="font-size:170px; line-height:1;">☠</div>
+  <div style="font-size:56px; margin-top:10px;">JE BENT DOOD</div>
+  <div id="hellDeathTimer" style="font-size:28px; color:#f87171; margin-top:8px;">Respawn over 10s...</div>
+`;
+document.body.appendChild(hellDeathOverlay);
 
 // Vergroot de klikzone van alle knoppen zonder visuele layout-wijziging.
 const globalButtonHitboxStyle = document.createElement("style");
@@ -933,16 +754,6 @@ document.addEventListener(
   (event) => {
     const btn = event.target instanceof Element ? event.target.closest("button") : null;
     if (!btn || btn.disabled) return;
-    if (btn.id === "saveGameBtn") {
-      event.preventDefault();
-      window.manualSave("hud");
-      return;
-    }
-    if (btn.id === "manualSaveSettingsBtn") {
-      event.preventDefault();
-      window.manualSave("settings");
-      return;
-    }
     if (typeof btn.onclick === "function") return;
     const inlineAction = btn.getAttribute("onclick");
     if (!inlineAction) return;
@@ -958,7 +769,6 @@ document.addEventListener(
 
 ui.innerHTML = `
     <div id="geldDisp" style="position:absolute; top:20px; left:20px; background:rgba(0,0,0,0.8); padding:15px 30px; border-radius:15px; border:4px solid #2ecc71; pointer-events:auto; color:#2ecc71; font-size:45px;">$ 0.00</div>
-    <div id="hellHud" style="position:absolute; top:120px; left:20px; background:rgba(100,0,0,0.8); padding:10px 20px; border-radius:12px; border:4px solid #ff4444; color:#ffdddd; font-size:28px; display:none;">KILLS: 0 / 10</div>
     <div id="diamantDisp" style="position:absolute; top:145px; right:20px; background:rgba(0,0,0,0.8); padding:10px 24px; border-radius:12px; border:4px solid #5dade2; pointer-events:auto; color:#85c1e9; font-size:30px; text-align:right;">DIAMANTEN: 0</div>
     <div id="trofeeDisp" style="position:absolute; top:20px; right:20px; background:rgba(0,0,0,0.8); padding:10px 25px; border-radius:15px; border:4px solid #f1c40f; pointer-events:auto; text-align:right;"></div>
     <div id="miniGameSlot" style="position:absolute; top:300px; right:20px; pointer-events:auto;"></div>
@@ -968,7 +778,6 @@ ui.innerHTML = `
     <div id="upgradeMenu" style="position:absolute; top:50%; left:20px; transform:translateY(-50%); display:flex; flex-direction:column; gap:12px; pointer-events:auto;"></div>
     <button id="gpBtn" onclick="window.openGP()" style="position:absolute; bottom:25px; left:25px; background:linear-gradient(to bottom, #f1c40f, #f39c12); color:white; border:5px solid white; padding:25px 50px; border-radius:20px; font-size:32px; cursor:pointer; pointer-events:auto; font-family:Impact;">GRASSPASS</button>
     <div id="rightPanel" style="position:absolute; bottom:25px; right:25px; display:flex; flex-direction:column; gap:10px; align-items:flex-end; pointer-events:auto;">
-        <button id="saveGameBtn" onclick="window.manualSave('hud')" style="background:#16a34a; color:white; border:3px solid white; padding:10px 20px; border-radius:10px; cursor:pointer; font-size:18px; font-family:Impact;">SPEL OPSLAAN</button>
         <button onclick="window.openCheat()" style="background:#e74c3c; color:white; border:3px solid white; padding:10px 20px; border-radius:10px; cursor:pointer; font-size:18px; font-family:Impact;">REDEEM CODE</button>
         <button id="eventBtn" onclick="window.openEvent()" style="background:#9b59b6; color:white; border:5px solid white; padding:20px 45px; border-radius:20px; font-size:24px; cursor:pointer; font-family:Impact;">EVENT</button>
     </div>
@@ -996,20 +805,7 @@ window.updateUI = () => {
   setDisplay("shopBtn", !isCreative);
   setDisplay("gpBtn", !isCreative);
   setDisplay("rightPanel", !isCreative, "flex");
-  setDisplay("saveGameBtn", !isCreative);
   setDisplay("fpsDisp", fpsMeterOnd);
-
-  const hellHudEl = document.getElementById("hellHud");
-  if (huidigeMapId === "HELL" && !isCreative) {
-    if (hellHudEl) {
-      hellHudEl.style.display = "block";
-      hellHudEl.innerHTML = `KILLS: ${hellKills} / 10`;
-    }
-  } else {
-    if (hellHudEl) {
-      hellHudEl.style.display = "none";
-    }
-  }
 
   if (isCreative) {
     miniGameKnopZichtbaar = false;
@@ -1117,19 +913,12 @@ window.setCreativeSpeed = (value) => {
   if (el) el.innerText = creativeSpeed.toFixed(2);
 };
 
-window.triggerDamageFlash = () => {
-  damageOverlay.style.opacity = "0.4";
-  setTimeout(() => (damageOverlay.style.opacity = "0"), 150);
-};
-
 window.applySkinVisual = (skinNaam) => {
   if (!mowerBodyMaterial) return;
   const basisKleur = alleSkinKleuren[skinNaam] ?? 0xff0000;
-  const isStarter = skinNaam === "STARTER";
   const isRed = skinNaam === "RED";
   const isBlue = skinNaam === "BLUE";
-  const isFerrari = skinNaam === "GOLDEN";
-  const isOmgekeerd = !isStarter && !isRed && !isBlue;
+  const isOmgekeerd = !isRed && !isBlue;
   const override = skinVisualOverrides[skinNaam] || {};
 
   const color = override.color ?? basisKleur;
@@ -1147,14 +936,6 @@ window.applySkinVisual = (skinNaam) => {
     mowerDetailedModel.visible = !isRed;
     mowerDetailedModel.rotation.y = isOmgekeerd ? Math.PI : 0;
   }
-  if (mowerStarterKit) {
-    mowerStarterKit.visible = isStarter;
-    mowerStarterKit.rotation.y = isStarter ? 0 : Math.PI;
-  }
-  if (mowerFerrariKit) {
-    mowerFerrariKit.visible = isFerrari;
-    mowerFerrariKit.rotation.y = isFerrari ? 0 : Math.PI;
-  }
   if (mowerBlueKit) {
     mowerBlueKit.visible = isBlue;
     mowerBlueKit.rotation.y = isBlue ? 0 : Math.PI;
@@ -1168,30 +949,6 @@ window.applySkinVisual = (skinNaam) => {
     : emissiveIntensity;
   mowerBodyMaterial.specular.set(specular);
   mowerBodyMaterial.shininess = isBlue ? shininess + 22 : shininess;
-
-  const fx = SKIN_SPECIAL_EFFECTS[skinNaam] || null;
-  if (mowerSkinAuraLight) {
-    mowerSkinAuraLight.visible = Boolean(fx);
-    if (fx) {
-      mowerSkinAuraLight.color.set(fx.auraColor);
-      mowerSkinAuraLight.intensity = fx.auraBase;
-    }
-  }
-  if (mowerSkinRing) mowerSkinRing.visible = Boolean(fx);
-  if (mowerSkinRingMaterial && fx) {
-    mowerSkinRingMaterial.color.set(fx.ringColor);
-    mowerSkinRingMaterial.opacity = fx.ringOpacity;
-  }
-  if (mowerSkinTrailLine) {
-    mowerSkinTrailLine.visible = Boolean(fx);
-    if (fx && mowerSkinTrailLine.material?.color) {
-      mowerSkinTrailLine.material.color.set(fx.trailColor);
-    }
-    mowerSkinTrailPoints.length = 0;
-    mowerSkinTrailLine.geometry.setFromPoints(mowerSkinTrailPoints);
-    mowerSkinTrailInitialized = false;
-  }
-  skinFxPulse = 0;
 };
 
 window.maakBasicSnapshot = () => ({
@@ -1309,7 +1066,100 @@ window.resetClassicGrassField = () => {
   grassMesh.instanceMatrix.needsUpdate = true;
 };
 
+window.resetRuntimeNaMapSwitch = () => {
+  previousMowerPos.copy(mower.position);
+  mowerVelocity.set(0, 0, 0);
+  smoothedMowerVelocity.set(0, 0, 0);
+  cameraSwayOffset.set(0, 0, 0);
+  cameraSwayTarget.set(0, 0, 0);
+  cameraLookAhead.set(0, 0, 0);
+  desiredLookTarget.copy(mower.position);
+  cameraLookTarget.copy(mower.position);
+  setWorldVectorFromLocalXZ(cameraOffsetWorld, CAMERA_OFFSET, stuurYaw);
+  desiredCameraPos.copy(mower.position).add(cameraOffsetWorld);
+  camera.position.copy(desiredCameraPos);
+  frameAccumulatorMs = 0;
+  lastFrameTime = performance.now();
+  uiDirty = true;
+  for (const k in keys) keys[k] = false;
+};
+
+window.updateHellDeathOverlay = (now = Date.now()) => {
+  if (!hellDeathActief) {
+    hellDeathOverlay.style.display = "none";
+    return;
+  }
+  hellDeathOverlay.style.display = "flex";
+  const sec = Math.max(0, Math.ceil((hellDeathTotMs - now) / 1000));
+  const timerEl = document.getElementById("hellDeathTimer");
+  if (timerEl) timerEl.textContent = `Respawn over ${sec}s...`;
+};
+
+window.verplaatsNaarClassicNaHellDood = () => {
+  hellDeathActief = false;
+  hellDeathTotMs = 0;
+  hellSpawnGraceTotMs = 0;
+  hellRunGestartOpMs = 0;
+  hellDiamantBeloningGekregen = false;
+  actieveServer = "classic";
+  serverGestartOpMs = Date.now();
+  gameMode = "classic";
+  oneindigSpeelveldOnd = false;
+  stuurYaw = 0;
+  mower.rotation.y = 0;
+  mower.position.set(0, 0, 0);
+  window.resetClassicGrassField();
+  window.applyServerVisuals();
+  window.updateHellDeathOverlay();
+  window.resetRuntimeNaMapSwitch();
+  window.updateUI();
+  if (document.getElementById("settingsPanel")) window.openSettings();
+};
+
+window.triggerHellDeath = () => {
+  if (!isHellServerActief() || hellDeathActief) return;
+  hellDeathActief = true;
+  hellDeathTotMs = Date.now() + HELL_DEATH_SCREEN_MS;
+  window.updateHellDeathOverlay();
+  for (const k in keys) keys[k] = false;
+};
+
+window.switchServer = (doelServer) => {
+  const volgendeServer = normalizeServerId(doelServer);
+  if (actieveServer === volgendeServer) return;
+  actieveServer = volgendeServer;
+  serverGestartOpMs = Date.now();
+  hellDeathActief = false;
+  hellDeathTotMs = 0;
+  hellSpawnGraceTotMs = 0;
+  if (isHellServerActief()) {
+    gameMode = "classic";
+    oneindigSpeelveldOnd = false;
+    hellRunGestartOpMs = Date.now();
+    hellDiamantBeloningGekregen = false;
+    mower.position.set(0, 0, 0);
+    window.resetClassicGrassField();
+    hellSpawnGraceTotMs = Date.now() + HELL_SPAWN_GRACE_MS;
+  } else {
+    hellRunGestartOpMs = 0;
+    hellDiamantBeloningGekregen = false;
+  }
+  window.applyServerVisuals();
+  window.updateHellDeathOverlay();
+  window.resetRuntimeNaMapSwitch();
+  window.updateUI();
+  if (document.getElementById("settingsPanel")) window.openSettings();
+};
+
+window.toggleServer = () => {
+  window.switchServer(isHellServerActief() ? "classic" : "hell");
+};
+
 window.toggleGameMode = () => {
+  if (isHellServerActief()) {
+    alert("Creative mode staat uit op de Hell server.");
+    return;
+  }
   window.cleanupMiniGame();
   miniGameKnopZichtbaar = false;
   miniGameKnopZichtbaarTot = 0;
@@ -1616,22 +1466,6 @@ window.stopMiniGame = () => {
   window.updateUI();
 };
 
-window.forceWinMiniGame = () => {
-  if (gameMode === "creative") return;
-  if (!miniGameActief) {
-    miniGameKnopZichtbaar = true;
-    miniGameKnopZichtbaarTot = Date.now() + MINIGAME_KNOP_DUUR_MS;
-    window.openMiniGame();
-    if (!miniGameActief) return;
-  }
-  miniGameRonde = MINIGAME_RONDES;
-  const zone = window.getMiniGameZone();
-  miniGameMarkerPos = (zone.start + zone.einde) / 2;
-  const marker = document.getElementById("miniGameMarker");
-  if (marker) marker.style.left = `${miniGameMarkerPos}%`;
-  window.stopMiniGame();
-};
-
 window.claimT = (i) => {
   if (i === geclaimdeTrofeeen + 1) {
     geclaimdeTrofeeen++;
@@ -1652,19 +1486,16 @@ window.openShop = () => {
   if (!Number.isFinite(diamanten) || diamanten < 0) diamanten = 0;
   const volgendeRebirtMulti = (verdienMultiplier * REBIRT_BONUS_STEP).toFixed(2);
   const radKost = window.getRadKost();
-  const skinShopHtml = DIAMANT_SKINS_SHOP.map((skin) => {
-    const gekocht = ontgrendeldeSkins.includes(skin.id);
-    const kanKopen = diamanten >= skin.prijs;
-    const knopTekst = gekocht ? "GEKOCHT" : `KOOP (${skin.prijs}D)`;
-    const knopKleur = gekocht ? "#16a34a" : kanKopen ? "#7c3aed" : "#555";
-    const cursor = gekocht || kanKopen ? "pointer" : "default";
-    return `<div style="padding:12px; background:#111827; border:2px solid #374151; border-radius:12px;">
-      <div style="font-size:22px; color:${skin.kleur};">${skin.naam}</div>
-      <div style="font-size:16px; color:#cbd5e1; margin:4px 0 10px 0;">Special FX skin</div>
-      <button onclick="window.koopSkinMetDiamanten('${skin.id}')" ${gekocht ? "disabled" : ""} style="width:100%; padding:10px; background:${knopKleur}; color:white; border:2px solid white; border-radius:10px; font-family:Impact; font-size:18px; cursor:${cursor};">${knopTekst}</button>
-    </div>`;
+  const skinKnoppenHtml = SHOP_SKINS.map((skin) => {
+    const alVrij = ontgrendeldeSkins.includes(skin);
+    const kanKopen = !alVrij && diamanten >= SHOP_SKIN_KOST;
+    const knopTekst = alVrij ? `${skin} (OWNED)` : `${skin} (${SHOP_SKIN_KOST}D)`;
+    const bg = alVrij ? "#2ecc71" : kanKopen ? "#3498db" : "#555";
+    const cursor = alVrij ? "default" : kanKopen ? "pointer" : "default";
+    const klik = alVrij || !kanKopen ? "" : `onclick="window.koopSkin('${skin}')"`;
+    return `<button ${klik} style="padding:12px; background:${bg}; color:white; border:2px solid white; border-radius:10px; cursor:${cursor}; font-family:Impact; font-size:18px;">${knopTekst}</button>`;
   }).join("");
-  overlay.innerHTML = `<div style="background:#111; padding:45px; border:8px solid #5dade2; border-radius:30px; text-align:center; min-width:560px; max-width:92vw; max-height:85vh; overflow-y:auto; overflow-x:hidden;">
+  overlay.innerHTML = `<div style="background:#111; padding:45px; border:8px solid #5dade2; border-radius:30px; text-align:center; min-width:560px;">
         <h1 style="color:#85c1e9; font-size:60px; margin:0 0 10px 0;">&#128142; SHOP</h1>
         <p style="font-size:24px; margin:8px 0; color:#2ecc71;">Geld: $${geld.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         <p style="font-size:26px; margin:10px 0 25px 0;">Diamanten: <span style="color:#85c1e9;">${diamanten}</span></p>
@@ -1673,18 +1504,15 @@ window.openShop = () => {
           <button onclick="window.koopRebirt()" style="width:100%; padding:16px; background:${diamanten >= REBIRT_KOST_DIAMANT ? "#2ecc71" : "#555"}; color:white; border:3px solid white; border-radius:12px; cursor:${diamanten >= REBIRT_KOST_DIAMANT ? "pointer" : "default"}; font-family:Impact; font-size:24px;">REBIRT (+5% | ${REBIRT_KOST_DIAMANT}D)</button>
           <p style="font-size:18px; color:#c8f7c5; margin:10px 0 0 0;">Reset enkel upgrades. Huidig: x${verdienMultiplier.toFixed(2)} | Na rebirt: x${volgendeRebirtMulti}</p>
         </div>
+        <div style="margin-top:16px; padding:16px; background:#1f2d3a; border:3px solid #3498db; border-radius:14px;">
+          <div style="font-size:24px; color:#85c1e9; margin-bottom:10px;">SKINS (${SHOP_SKIN_KOST}D)</div>
+          <div style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px;">${skinKnoppenHtml}</div>
+        </div>
         <div style="margin-top:22px; padding:16px; background:#2d1f3a; border:3px solid #8e44ad; border-radius:14px;">
           <div style="font-size:26px; color:#d2b4de; margin-bottom:8px;"> LUCKY RAD</div>
           <p style="font-size:20px; margin:0 0 12px 0; color:#e8daef;">Beloningen groeien geleidelijk met je progressie.</p>
           <button onclick="window.draaiRad()" style="width:100%; padding:16px; background:${diamanten >= radKost ? "#8e44ad" : "#555"}; color:white; border:3px solid white; border-radius:12px; cursor:${diamanten >= radKost ? "pointer" : "default"}; font-family:Impact; font-size:24px;">DRAAI RAD (${radKost}D)</button>
           <p style="font-size:18px; color:#d7bde2; margin:10px 0 0 0;">Mogelijke rewards: Geld, Diamanten, Radius/Speed/Value upgrade</p>
-        </div>
-        <div style="margin-top:22px; padding:16px; background:#1f1236; border:3px solid #7c3aed; border-radius:14px;">
-          <div style="font-size:26px; color:#c4b5fd; margin-bottom:10px;"> DIAMANT SKINS</div>
-          <p style="font-size:18px; margin:0 0 12px 0; color:#ddd6fe;">Koop premium skins met speciale effecten.</p>
-          <div style="display:grid; grid-template-columns:repeat(2, minmax(220px, 1fr)); gap:10px;">
-            ${skinShopHtml}
-          </div>
         </div>
         <button onclick="window.sluit()" style="margin-top:16px; padding:14px 50px; background:#5dade2; color:white; border:none; border-radius:12px; font-family:Impact; font-size:24px; cursor:pointer;">SLUITEN</button>
     </div>`;
@@ -1692,30 +1520,6 @@ window.openShop = () => {
 
 window.koopDiamant = () => {
   alert("Diamanten kopen staat uit. Verdien diamanten via Grass Pass.");
-};
-window.koopSkinMetDiamanten = (skinId) => {
-  const id = String(skinId || "").toUpperCase();
-  const skinDef = DIAMANT_SKINS_SHOP.find((skin) => skin.id === id);
-  if (!skinDef) {
-    alert("Deze skin bestaat niet.");
-    return;
-  }
-  if (ontgrendeldeSkins.includes(id)) {
-    alert(`${skinDef.naam} is al gekocht.`);
-    return;
-  }
-  if (diamanten < skinDef.prijs) {
-    alert(`Je hebt ${skinDef.prijs} diamanten nodig voor ${skinDef.naam}.`);
-    return;
-  }
-  diamanten -= skinDef.prijs;
-  ontgrendeldeSkins.push(id);
-  huidigeSkin = id;
-  window.applySkinVisual(huidigeSkin);
-  window.updateUI();
-  window.save(true);
-  alert(`${skinDef.naam} gekocht en geactiveerd!`);
-  window.openShop();
 };
 
 window.koopRebirt = () => {
@@ -1736,6 +1540,22 @@ window.koopRebirt = () => {
   prijsWaarde = 10;
   rebirtCount++;
   verdienMultiplier = Math.pow(REBIRT_BONUS_STEP, rebirtCount);
+  window.updateUI();
+  window.openShop();
+};
+window.koopSkin = (skinNaam) => {
+  const skin = String(skinNaam || "").trim().toUpperCase();
+  if (!SHOP_SKINS.includes(skin)) return;
+  if (ontgrendeldeSkins.includes(skin)) {
+    alert("Deze skin heb je al.");
+    return;
+  }
+  if (diamanten < SHOP_SKIN_KOST) {
+    alert(`Je hebt ${SHOP_SKIN_KOST} diamanten nodig.`);
+    return;
+  }
+  diamanten -= SHOP_SKIN_KOST;
+  ontgrendeldeSkins.push(skin);
   window.updateUI();
   window.openShop();
 };
@@ -1826,18 +1646,6 @@ window.kiesRadBeloning = () => {
       upgradeType: "w",
       text: "Gratis Value Upgrade",
     },
-    {
-      weight: 1.35,
-      type: "skin",
-      skinId: "GOLDEN",
-      text: "GOLDEN SKIN",
-    },
-    {
-      weight: 0.9,
-      type: "skin",
-      skinId: "THE JOKER",
-      text: "THE JOKER SKIN",
-    },
   ];
   const totaal = pool.reduce((sum, p) => sum + p.weight, 0);
   let roll = Math.random() * totaal;
@@ -1863,16 +1671,6 @@ window.pasRadBeloningToe = (beloning) => {
     const fallback = Math.round(250 * window.getRadProgressFactor());
     geld += fallback;
     return `Upgrade was max, dus je kreeg $${fallback.toLocaleString()} geld!`;
-  }
-  if (beloning.type === "skin") {
-    const skinId = String(beloning.skinId || "").toUpperCase();
-    if (!skinId || ontgrendeldeSkins.includes(skinId)) {
-      const fallbackDiamanten = 2;
-      diamanten += fallbackDiamanten;
-      return `Skin al vrijgespeeld, dus je kreeg ${fallbackDiamanten} diamant(en)!`;
-    }
-    ontgrendeldeSkins.push(skinId);
-    return `Nieuwe skin vrijgespeeld: ${skinId}!`;
   }
   return "Geen beloning.";
 };
@@ -1956,7 +1754,7 @@ window.openSkins = () => {
   overlay.style.left = "0";
   overlay.style.pointerEvents = "auto";
   let h = `<div style="background:#111; padding:40px; border:8px solid #3498db; border-radius:30px; text-align:center; max-width:80%; max-height:80vh; overflow-y:auto;"><h1 style="color:#3498db; font-size:50px; margin-bottom:20px;"> SKINS</h1><div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:15px;">`;
-  ["STARTER", "RED", "BLUE", "GOLDEN", "THE JOKER", ...DIAMANT_SKIN_IDS, ...maanden].forEach((s) => {
+  ["RED", "BLUE", ...maanden].forEach((s) => {
     const ok = gameMode === "creative" || ontgrendeldeSkins.includes(s),
       cur = huidigeSkin === s;
     h += `<button class="skinSelectBtn" data-skin="${s}" data-unlocked="${ok ? "1" : "0"}" style="padding:20px; background:${ok ? (cur ? "#2ecc71" : "#333") : "#111"}; color:${ok ? "white" : "#555"}; font-family:Impact; border:${cur ? "4px solid white" : "2px solid #444"}; border-radius:15px; cursor:${ok ? "pointer" : "default"}; font-size:18px;" ${ok ? "" : "disabled"}>${ok ? s : "LOCKED"}</button>`;
@@ -2047,92 +1845,10 @@ window.toggleAutoSave = () => {
   if (autoSaveOnd) window.save(true);
   window.openSettings();
 };
-window.showSaveToast = (text = "GAME OPGESLAGEN...", color = "rgba(255,255,255,0.5)") => {
-  const t = document.getElementById("saveToast");
-  if (!t) return;
-  t.textContent = text;
-  t.style.color = color;
-  t.style.opacity = 1;
-  setTimeout(() => (t.style.opacity = 0), 1500);
-};
-window.manualSave = async (source = "hud") => {
-  const settingsSaveStatus = document.getElementById("settingsSaveStatus");
-  const hudSaveBtn = document.getElementById("saveGameBtn");
-  const settingsSaveBtn = document.getElementById("manualSaveSettingsBtn");
-  const saveBtn = source === "settings" ? settingsSaveBtn || hudSaveBtn : hudSaveBtn;
-  if (saveBtn) {
-    saveBtn.textContent = "OPSLAAN...";
-    saveBtn.style.background = "#2563eb";
-  }
-  if (settingsSaveStatus) {
-    settingsSaveStatus.textContent = "Status: opslaan...";
-    settingsSaveStatus.style.color = "#93c5fd";
-  }
-  let gelukt = false;
-  try {
-    gelukt = await window.save(true);
-  } catch (err) {
-    console.error("Handmatig opslaan crashte:", err);
-    gelukt = false;
-  }
-  if (gelukt) {
-    if (saveBtn) {
-      const tijd = new Date().toLocaleTimeString("nl-NL", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-      saveBtn.textContent = `OPGESLAGEN ${tijd}`;
-      saveBtn.style.background = "#22c55e";
-      setTimeout(() => {
-        saveBtn.textContent = "SPEL OPSLAAN";
-        saveBtn.style.background = "#16a34a";
-      }, 1800);
-    }
-    if (settingsSaveStatus) {
-      settingsSaveStatus.textContent = "Status: opgeslagen";
-      settingsSaveStatus.style.color = "#86efac";
-    }
-    window.showSaveToast("GAME OPGESLAGEN...");
-  } else {
-    if (saveBtn) {
-      saveBtn.textContent = "OPSLAAN MISLUKT";
-      saveBtn.style.background = "#dc2626";
-      setTimeout(() => {
-        saveBtn.textContent = "SPEL OPSLAAN";
-        saveBtn.style.background = "#16a34a";
-      }, 1800);
-    }
-    if (settingsSaveStatus) {
-      settingsSaveStatus.textContent = "Status: opslaan mislukt";
-      settingsSaveStatus.style.color = "#fca5a5";
-    }
-    window.showSaveToast("OPSLAAN MISLUKT", "#f87171");
-  }
-};
-window.claimDagelijksCadeau = async () => {
-  if (!kanDagelijksCadeauClaimen()) {
-    alert(
-      `Je hebt je dagelijkse cadeau al geclaimd. Nieuw cadeau over ${getDagelijksCadeauResterendeTijd()}.`,
-    );
-    return;
-  }
-  dagelijkseCadeauClaimKey = getLokaleDagKey();
-  diamanten += DAILY_GIFT_DIAMANT_REWARD;
-  geld += DAILY_GIFT_GELD_REWARD;
-  totaalVerdiend += DAILY_GIFT_GELD_REWARD;
-  totaalVerdiendVoorTrofeeen += DAILY_GIFT_GELD_REWARD;
-  window.updateUI();
-  await window.save(true);
-  window.openSettings();
-  alert(
-    `Dagelijks cadeau geclaimd: +${DAILY_GIFT_DIAMANT_REWARD} diamant en +$${DAILY_GIFT_GELD_REWARD.toLocaleString()}.`,
-  );
-};
 
 window.toggleLichtKleur = () => {
   lichtKleur = lichtKleur === "hemelsblauw" ? "default" : "hemelsblauw";
-  window.applyMapTheme();
+  window.applyServerVisuals();
   window.openSettings();
 };
 
@@ -2146,6 +1862,10 @@ window.toggleFpsMeter = () => {
   window.openSettings();
 };
 window.toggleOneindigSpeelveld = () => {
+  if (isHellServerActief()) {
+    alert("Oneindig speelveld staat uit op de Hell server.");
+    return;
+  }
   oneindigSpeelveldOnd = !oneindigSpeelveldOnd;
   if (gameMode === "classic") {
     previousMowerPos.copy(mower.position);
@@ -2192,16 +1912,15 @@ window.getSaveData = () => ({
   verdienMultiplier,
   totaalSpeeltijdSec,
   lichtKleur,
-  huidigeMapId,
   radDraaiCount,
-  dagelijkseCadeauClaimKey,
   creativeSpeed,
   fpsMeterOnd,
   oneindigSpeelveldOnd,
-  hellCooldownTot,
+  actieveServer,
+  serverGestartOpMs,
+  hellRunGestartOpMs,
+  hellDiamantBeloningGekregen,
   gebruikteRedeemCodes: [...gebruikteRedeemCodes],
-  mowerX: mower.position.x,
-  mowerZ: mower.position.z,
 });
 
 window.applySaveData = (d) => {
@@ -2235,12 +1954,12 @@ window.applySaveData = (d) => {
   grasWaarde = BASE_GRASS_VALUE + countWaarde * VALUE_UPGRADE_STEP;
   gpLevel = Number.isFinite(d.gpLevel) ? d.gpLevel : 1;
   eventLevel = Number.isFinite(d.eventLevel) ? d.eventLevel : 1;
-  huidigeSkin = d.huidigeSkin || "STARTER";
+  huidigeSkin = d.huidigeSkin || "RED";
   ontgrendeldeSkins = Array.isArray(d.ontgrendeldeSkins)
     ? [...new Set(d.ontgrendeldeSkins.map((skin) => String(skin).toUpperCase()))]
-    : ["STARTER"];
-  if (!ontgrendeldeSkins.includes("STARTER")) ontgrendeldeSkins.unshift("STARTER");
-  if (!ontgrendeldeSkins.includes(huidigeSkin)) huidigeSkin = "STARTER";
+    : ["RED"];
+  if (!ontgrendeldeSkins.includes("RED")) ontgrendeldeSkins.unshift("RED");
+  if (!ontgrendeldeSkins.includes(huidigeSkin)) huidigeSkin = "RED";
   eventMaandKey =
     typeof d.eventMaandKey === "string" && /^\d{4}-\d{2}$/.test(d.eventMaandKey)
       ? d.eventMaandKey
@@ -2250,7 +1969,7 @@ window.applySaveData = (d) => {
     /^\d{4}-\d{2}$/.test(d.spelerResetMaandKey)
       ? d.spelerResetMaandKey
       : getHuidigeEventMaandKey();
-  autoSaveOnd = typeof d.autoSaveOnd === "boolean" ? d.autoSaveOnd : true;
+  autoSaveOnd = Boolean(d.autoSaveOnd);
   gameMode = normalizeGameMode(d.gameMode);
   actieveOpdracht = d.actieveOpdracht || null;
   eventOpdracht = d.eventOpdracht || null;
@@ -2266,24 +1985,36 @@ window.applySaveData = (d) => {
     : 0;
   lichtKleur =
     d.lichtKleur === "blue" ? "hemelsblauw" : (d.lichtKleur ?? "default");
-  huidigeMapId = normalizeMapId(d.huidigeMapId);
   radDraaiCount = Number.isFinite(d.radDraaiCount) ? d.radDraaiCount : 0;
-  dagelijkseCadeauClaimKey =
-    typeof d.dagelijkseCadeauClaimKey === "string" &&
-    /^\d{4}-\d{2}-\d{2}$/.test(d.dagelijkseCadeauClaimKey)
-      ? d.dagelijkseCadeauClaimKey
-      : null;
   creativeSpeed = Number.isFinite(d.creativeSpeed) ? d.creativeSpeed : 0.5;
   fpsMeterOnd = Boolean(d.fpsMeterOnd);
   oneindigSpeelveldOnd = Boolean(d.oneindigSpeelveldOnd);
-  hellCooldownTot = Number.isFinite(d.hellCooldownTot) ? d.hellCooldownTot : 0;
+  actieveServer = normalizeServerId(d.actieveServer);
+  serverGestartOpMs = Number.isFinite(d.serverGestartOpMs)
+    ? d.serverGestartOpMs
+    : Date.now();
+  hellRunGestartOpMs = Number.isFinite(d.hellRunGestartOpMs)
+    ? d.hellRunGestartOpMs
+    : 0;
+  hellDiamantBeloningGekregen = Boolean(d.hellDiamantBeloningGekregen);
+  if (Date.now() - serverGestartOpMs >= SERVER_VERLOOP_MS) {
+    actieveServer = "classic";
+    serverGestartOpMs = Date.now();
+    hellRunGestartOpMs = 0;
+    hellDiamantBeloningGekregen = false;
+  }
+  if (isHellServerActief()) {
+    gameMode = "classic";
+    oneindigSpeelveldOnd = false;
+    if (!Number.isFinite(hellRunGestartOpMs) || hellRunGestartOpMs <= 0) {
+      hellRunGestartOpMs = Date.now();
+    }
+  }
   gebruikteRedeemCodes = Array.isArray(d.gebruikteRedeemCodes)
     ? d.gebruikteRedeemCodes
         .map((code) => String(code).trim().toUpperCase())
         .filter(Boolean)
     : [];
-  mower.position.x = Number.isFinite(d.mowerX) ? d.mowerX : 0;
-  mower.position.z = Number.isFinite(d.mowerZ) ? d.mowerZ : 0;
   window.syncEventMetMaand();
   return true;
 };
@@ -2295,7 +2026,7 @@ window.loadCloudSave = async () => {
     if (!snap.exists()) return false;
     const geladen = window.applySaveData(snap.data());
     if (!geladen) return false;
-    window.applyMapTheme();
+    window.applyServerVisuals();
     if (!actieveOpdracht) window.genereerMissie(false);
     if (!eventOpdracht) window.genereerMissie(true);
     window.applySkinVisual(huidigeSkin);
@@ -2332,7 +2063,7 @@ window.initFirebase = () => {
         }
         if (backup) {
           window.applySaveData(backup);
-          window.applyMapTheme();
+          window.applyServerVisuals();
           if (!actieveOpdracht) window.genereerMissie(false);
           if (!eventOpdracht) window.genereerMissie(true);
           window.applySkinVisual(huidigeSkin);
@@ -2372,102 +2103,52 @@ window.toggleGoogleLogin = async () => {
   }
 };
 
-window.serializeSaveData = () => {
-  try {
-    const data = window.getSaveData();
-    return {
-      data,
-      json: JSON.stringify(data),
-    };
-  } catch (err) {
-    console.error("Save serialiseren mislukt:", err);
-    return null;
-  }
-};
-
-window.saveLocal = (serialized = null) => {
-  const payload = serialized ?? window.serializeSaveData();
-  if (!payload?.json) return false;
-  try {
-    localStorage.setItem(LOCAL_SAVE_KEY, payload.json);
-    localStorage.setItem(LOCAL_SAVE_BACKUP_KEY, payload.json);
-    return true;
-  } catch (err) {
-    console.error("Lokale save mislukt:", err);
-    return false;
-  }
-};
-const withTimeout = async (promise, timeoutMs = 3000) => {
-  let timeoutId = null;
-  const timeoutPromise = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error("timeout")), timeoutMs);
-  });
-  try {
-    return await Promise.race([promise, timeoutPromise]);
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
-};
-
 window.save = async (silent = false) => {
-  const serialized = window.serializeSaveData();
-  if (!serialized) return false;
-  if (!window.saveLocal(serialized)) return false;
+  const moetLokaalOpslaan = autoSaveOnd || silent;
+  const moetCloudOpslaan = Boolean(ingelogdeGebruiker && firebaseDb);
+  if (!moetLokaalOpslaan && !moetCloudOpslaan) return;
 
-  // Sla op in de cloud als de speler is ingelogd.
-  if (ingelogdeGebruiker && firebaseDb) {
+  const data = window.getSaveData();
+  localStorage.setItem(LOCAL_SAVE_KEY, JSON.stringify(data));
+
+  if (moetCloudOpslaan) {
     try {
-      await withTimeout(
-        setDoc(
-          getSaveDocRef(ingelogdeGebruiker.uid),
-          {
-            ...serialized.data,
-            accountEmail: ingelogdeGebruiker.email ?? null,
-            accountDisplayName: ingelogdeGebruiker.displayName ?? null,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        ),
-        3000,
+      await setDoc(
+        getSaveDocRef(ingelogdeGebruiker.uid),
+        {
+          ...data,
+          accountEmail: ingelogdeGebruiker.email ?? null,
+          accountDisplayName: ingelogdeGebruiker.displayName ?? null,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
       );
     } catch (err) {
       console.error("Cloud save mislukt:", err);
     }
   }
 
-  // Toon de "opgeslagen" toast alleen bij de periodieke auto-save,
-  // niet bij de 'stille' saves die op de achtergrond gebeuren.
-  if (autoSaveOnd && !silent) {
-    window.showSaveToast("GAME OPGESLAGEN...");
+  if (autoSaveOnd) {
+    const t = document.getElementById("saveToast");
+    if (t) {
+      t.style.opacity = 1;
+      setTimeout(() => (t.style.opacity = 0), 1500);
+    }
   }
-  return true;
 };
 
 window.load = () => {
-  const probeer = (raw) => {
-    if (!raw) return false;
-    try {
-      return window.applySaveData(JSON.parse(raw));
-    } catch {
-      return false;
-    }
-  };
-  const primary = localStorage.getItem(LOCAL_SAVE_KEY);
-  if (probeer(primary)) return true;
-
-  const backup = localStorage.getItem(LOCAL_SAVE_BACKUP_KEY);
-  if (!probeer(backup)) return false;
-
-  // Herstel primaire key vanuit backup na corrupte/lege primaire save.
+  const saved = localStorage.getItem(LOCAL_SAVE_KEY);
+  if (!saved) return false;
   try {
-    localStorage.setItem(LOCAL_SAVE_KEY, backup);
-  } catch {}
-  return true;
+    return window.applySaveData(JSON.parse(saved));
+  } catch {
+    return false;
+  }
 };
 
 window.finalReset = async () => {
   localStorage.removeItem(LOCAL_SAVE_KEY);
-  localStorage.removeItem(LOCAL_SAVE_BACKUP_KEY);
   localStorage.removeItem(CREATIVE_BACKUP_KEY);
   if (firebaseDb && ingelogdeGebruiker) {
     try {
@@ -2493,75 +2174,38 @@ window.openResetConfirm = () => {
 };
 
 window.openSettings = () => {
+  alert("Mensen, binnenkort zal deze game ook in het engels, duits, frans en spaans beschikbaar zijn. De updates zullen ook binnekort weer hervat worden. Veel plezier.")
+  alert("Folks, soon this game will also be available in English, German, French and Spanish. The updates will also resume soon. Have fun.")
+  alert("Leute, bald wird dieses Spiel auch auf Englisch, Deutsch, Französisch und Spanisch verfügbar sein. Auch die Updates werden bald wieder aufgenommen. Viel Spaß.")
+  alert("Mes amis, bientôt ce jeu sera également disponible en anglais, allemand, français et espagnol. Les mises à jour reprendront également prochainement. Amusez-vous.")
+  alert("Amigos, pronto este juego también estará disponible en inglés, alemán, francés y español. Las actualizaciones también se reanudarán pronto. Divertirse.")
   const accountNaam = getAccountLabel();
   const accountKnopTekst = ingelogdeGebruiker ? "UITLOGGEN" : "INLOGGEN MET GOOGLE";
   const accountKnopKleur = ingelogdeGebruiker ? "#e67e22" : "#4285f4";
-  const actieveMap = getMapById(huidigeMapId);
-  const cadeauClaimbaar = kanDagelijksCadeauClaimen();
-  const cadeauKnopTekst = cadeauClaimbaar
-    ? `DAGELIJKS CADEAU: CLAIM +${DAILY_GIFT_DIAMANT_REWARD} DIAMANT +$${DAILY_GIFT_GELD_REWARD}`
-    : `DAGELIJKS CADEAU: OVER ${getDagelijksCadeauResterendeTijd()}`;
+  const serverTot = formatResterendeTijd(getServerResterendMs());
   overlay.style.left = "0";
   overlay.style.pointerEvents = "auto";
-  overlay.innerHTML = `<div id="settingsPanel" style="background:#111; padding:60px; border:8px solid white; border-radius:30px; text-align:center; max-width:92vw; max-height:85vh; overflow-y:auto; overflow-x:hidden;">
+  overlay.innerHTML = `<div style="width:100%; height:100%; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; display:flex; align-items:flex-start; justify-content:center; padding:20px 0; box-sizing:border-box;">
+      <div id="settingsPanel" style="background:#111; padding:60px; border:8px solid white; border-radius:30px; text-align:center; max-width:min(92vw, 760px); box-sizing:border-box; margin:0 16px;">
+        <style>
+          #settingsPanel button { width:min(400px, 100%) !important; }
+          #settingsPanel div[data-accountbox="1"] { width:min(400px, 100%) !important; }
+          #settingsPanel button::after { inset: 0 !important; }
+        </style>
         <h1 style="font-size:60px; margin-bottom:30px;">INSTELLINGEN</h1>
-        <button onclick="window.toggleAutoSave()" style="width:400px; padding:20px; background:${autoSaveOnd ? "#2ecc71" : "#e74c3c"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">AUTO-SAVE: ${autoSaveOnd ? "AAN" : "UIT"}</button><br>
-        <button id="manualSaveSettingsBtn" onclick="window.manualSave('settings')" style="width:400px; padding:16px; background:#16a34a; color:white; font-family:Impact; font-size:24px; cursor:pointer; border:3px solid white; border-radius:15px; margin-bottom:6px;">SPEL NU OPSLAAN</button><br>
-        <div id="settingsSaveStatus" style="width:400px; margin:0 auto 10px; color:#9ca3af; font-size:18px;">Status: wacht op handmatig opslaan</div>
-        <button onclick="window.toggleGameMode()" style="width:400px; padding:20px; background:${gameMode === "creative" ? "#f1c40f" : "#333"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">MODE: ${gameMode.toUpperCase()}</button><br>
-        <button onclick="window.toggleOneindigSpeelveld()" style="width:400px; padding:20px; background:${oneindigSpeelveldOnd ? "#2ecc71" : "#444"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">ONEINDIG SPEELVELD: ${oneindigSpeelveldOnd ? "AAN" : "UIT"}</button><br>
-        <button onclick="window.toggleLichtKleur()" style="width:400px; padding:20px; background:${lichtKleur === "hemelsblauw" ? "#87ceeb" : "#333"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">ACHTERGROND: ${lichtKleur === "hemelsblauw" ? "HEMELSBLAUW" : "STANDAARD"}</button><br>
-        <button onclick="window.toggleFpsMeter()" style="width:400px; padding:20px; background:${fpsMeterOnd ? "#2ecc71" : "#444"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">FPS METER: ${fpsMeterOnd ? "AAN" : "UIT"}</button><br>
-        <button onclick="window.openMapSelect()" style="width:400px; padding:18px; background:#2563eb; color:white; font-family:Impact; font-size:24px; cursor:pointer; border:3px solid white; border-radius:15px; margin-bottom:10px;">MAP: ${actieveMap.naam}</button><br>
-        <div style="width:400px; padding:12px 16px; margin:0 auto 10px; background:#222; border:2px solid #555; border-radius:15px; color:#ddd; font-family:Impact; font-size:20px;">ACCOUNT: ${accountNaam}</div>
-        <button onclick="window.toggleGoogleLogin()" style="width:400px; padding:18px; background:${accountKnopKleur}; color:white; font-family:Impact; font-size:24px; cursor:pointer; border:3px solid white; border-radius:15px; margin-bottom:10px;">${accountKnopTekst}</button><br>
-        <button onclick="window.claimDagelijksCadeau()" style="width:400px; padding:16px; background:${cadeauClaimbaar ? "#f59e0b" : "#374151"}; color:white; font-family:Impact; font-size:21px; cursor:${cadeauClaimbaar ? "pointer" : "not-allowed"}; border:3px solid white; border-radius:15px; margin-bottom:10px;">${cadeauKnopTekst}</button><br>
-        <button onclick="window.openInfoPage()" style="width:400px; padding:16px; background:#1f2937; color:#93c5fd; font-family:Impact; font-size:24px; cursor:pointer; border:3px solid white; border-radius:15px; margin-bottom:10px;">INFO PAGINA</button><br>
-        <button onclick="window.openResetConfirm()" style="width:400px; padding:15px; background:#c0392b; color:white; font-family:Impact; font-size:22px; cursor:pointer; border:4px solid white; border-radius:15px;"> RESET GAME </button><br>
-        <button onclick="window.sluit()" style="padding:15px 80px; background:#2ecc71; color:white; font-family:Impact; font-size:30px; border:none; border-radius:15px; cursor:pointer; margin-top:20px;">SLUITEN</button></div>`;
-};
-window.selectMap = async (mapId) => {
-  if (mapId === "HELL" && Date.now() < hellCooldownTot) {
-    const resterendeMs = hellCooldownTot - Date.now();
-    const resterendeMinuten = Math.ceil(resterendeMs / 60000);
-    alert(`De hel is nog ${resterendeMinuten} minuten gesloten.`);
-    return;
-  }
-  huidigeMapId = normalizeMapId(mapId);
-  window.applyMapTheme();
-  window.updateUI();
-  await window.save(true);
-  window.openMapSelect();
-};
-
-window.openMapSelect = () => {
-  const actieveMap = getMapById(huidigeMapId);
-  const lijstHtml = MAP_PRESETS.map((map) => {
-    const actief = map.id === actieveMap.id;
-    return `<div style="text-align:left; background:#161b22; border:3px solid ${actief ? "#22c55e" : "#374151"}; border-radius:14px; padding:14px; margin:10px 0;">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:14px;">
-        <div>
-          <div style="font-size:24px; color:#93c5fd;">${escapeHtml(map.naam)}</div>
-        </div>
-        <button data-map-select="${map.id}" style="padding:12px 22px; border:none; border-radius:10px; font-family:Impact; font-size:20px; cursor:pointer; background:${actief ? "#22c55e" : "#2563eb"}; color:white;">${actief ? "ACTIEF" : "KIES"}</button>
-      </div>
+        <button onclick="window.toggleAutoSave()" style="padding:20px; background:${autoSaveOnd ? "#2ecc71" : "#e74c3c"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">AUTO-SAVE: ${autoSaveOnd ? "AAN" : "UIT"}</button><br>
+        <button onclick="window.toggleServer()" style="padding:20px; background:${isHellServerActief() ? "#b91c1c" : "#374151"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:6px;">SERVER: ${actieveServer.toUpperCase()}</button><br>
+        <div style="font-size:18px; color:#9ca3af; margin-bottom:10px;">SERVER VERLOOPT OVER: ${serverTot}</div>
+        <button onclick="window.toggleGameMode()" style="padding:20px; background:${gameMode === "creative" ? "#f1c40f" : "#333"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">MODE: ${gameMode.toUpperCase()}</button><br>
+        <button onclick="window.toggleOneindigSpeelveld()" style="padding:20px; background:${oneindigSpeelveldOnd ? "#2ecc71" : "#444"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">ONEINDIG SPEELVELD: ${oneindigSpeelveldOnd ? "AAN" : "UIT"}</button><br>
+        <button onclick="window.toggleLichtKleur()" style="padding:20px; background:${lichtKleur === "hemelsblauw" ? "#87ceeb" : "#333"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">ACHTERGROND: ${lichtKleur === "hemelsblauw" ? "HEMELSBLAUW" : "STANDAARD"}</button><br>
+        <button onclick="window.toggleFpsMeter()" style="padding:20px; background:${fpsMeterOnd ? "#2ecc71" : "#444"}; color:white; font-family:Impact; font-size:25px; cursor:pointer; border:none; border-radius:15px; margin-bottom:10px;">FPS METER: ${fpsMeterOnd ? "AAN" : "UIT"}</button><br>
+        <div data-accountbox="1" style="padding:12px 16px; margin:0 auto 10px; background:#222; border:2px solid #555; border-radius:15px; color:#ddd; font-family:Impact; font-size:20px;">ACCOUNT: ${accountNaam}</div>
+        <button onclick="window.toggleGoogleLogin()" style="padding:18px; background:${accountKnopKleur}; color:white; font-family:Impact; font-size:24px; cursor:pointer; border:3px solid white; border-radius:15px; margin-bottom:10px;">${accountKnopTekst}</button><br>
+        <button onclick="window.openInfoPage()" style="padding:16px; background:#1f2937; color:#93c5fd; font-family:Impact; font-size:24px; cursor:pointer; border:3px solid white; border-radius:15px; margin-bottom:10px;">INFO PAGINA</button><br>
+        <button onclick="window.openResetConfirm()" style="padding:15px; background:#c0392b; color:white; font-family:Impact; font-size:22px; cursor:pointer; border:4px solid white; border-radius:15px;"> RESET GAME </button><br>
+        <button onclick="window.sluit()" style="padding:15px 80px; background:#2ecc71; color:white; font-family:Impact; font-size:30px; border:none; border-radius:15px; cursor:pointer; margin-top:20px;">SLUITEN</button></div>
     </div>`;
-  }).join("");
-  overlay.style.left = "0";
-  overlay.style.pointerEvents = "auto";
-  overlay.innerHTML = `<div style="background:#111; padding:40px; border:8px solid #2563eb; border-radius:30px; text-align:center; min-width:680px; max-width:900px; max-height:85vh; overflow-y:auto;">
-    <h1 style="color:#93c5fd; font-size:52px; margin-bottom:8px;">MAPS</h1>
-    <p style="margin-bottom:12px; color:#dbeafe;">Kies een map-thema.</p>
-    ${lijstHtml}
-    <button onclick="window.openSettings()" style="margin-top:18px; padding:14px 56px; background:#2563eb; color:white; border:none; border-radius:12px; font-family:Impact; font-size:24px; cursor:pointer;">TERUG</button>
-  </div>`;
-  overlay.querySelectorAll("[data-map-select]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const gekozen = btn.getAttribute("data-map-select");
-      if (!gekozen) return;
-      window.selectMap(gekozen);
-    });
-  });
 };
 window.openCheat = () => {
   const c = (prompt("CODE:") || "").trim().toUpperCase();
@@ -2676,155 +2320,6 @@ for (const [x, y, z] of wheelOffsets) {
   wheel.position.set(x, y, z);
   mowerDetailedModel.add(wheel);
 }
-
-mowerStarterKit = new THREE.Group();
-const starterPaintMaterial = new THREE.MeshPhongMaterial({
-  color: 0x34d399,
-  emissive: 0x0f3f33,
-  emissiveIntensity: 0.3,
-  specular: 0xd1fae5,
-  shininess: 85,
-});
-const starterDarkMaterial = new THREE.MeshPhongMaterial({
-  color: 0x1f2937,
-  specular: 0xb8c2cf,
-  shininess: 70,
-});
-const starterLightMaterial = new THREE.MeshBasicMaterial({ color: 0x99f6e4 });
-
-const starterFrontBumper = new THREE.Mesh(
-  new THREE.BoxGeometry(1.22, 0.14, 0.22),
-  starterDarkMaterial,
-);
-starterFrontBumper.position.set(0, 0.27, 1.36);
-mowerStarterKit.add(starterFrontBumper);
-
-const starterNose = new THREE.Mesh(
-  new THREE.BoxGeometry(1.02, 0.12, 0.28),
-  starterPaintMaterial,
-);
-starterNose.position.set(0, 0.36, 1.26);
-mowerStarterKit.add(starterNose);
-
-const starterCanopy = new THREE.Mesh(
-  new THREE.BoxGeometry(0.78, 0.16, 0.52),
-  starterPaintMaterial,
-);
-starterCanopy.position.set(0, 0.82, -0.18);
-mowerStarterKit.add(starterCanopy);
-
-const starterRollBar = new THREE.Mesh(
-  new THREE.TorusGeometry(0.36, 0.04, 10, 18, Math.PI),
-  starterDarkMaterial,
-);
-starterRollBar.position.set(0, 0.97, -0.22);
-starterRollBar.rotation.z = Math.PI;
-mowerStarterKit.add(starterRollBar);
-
-const starterLightL = new THREE.Mesh(
-  new THREE.BoxGeometry(0.14, 0.08, 0.03),
-  starterLightMaterial,
-);
-starterLightL.position.set(-0.3, 0.4, 1.47);
-mowerStarterKit.add(starterLightL);
-
-const starterLightR = new THREE.Mesh(
-  new THREE.BoxGeometry(0.14, 0.08, 0.03),
-  starterLightMaterial,
-);
-starterLightR.position.set(0.3, 0.4, 1.47);
-mowerStarterKit.add(starterLightR);
-
-mowerStarterKit.visible = false;
-mowerDetailedModel.add(mowerStarterKit);
-
-mowerFerrariKit = new THREE.Group();
-const ferrariPaintMaterial = new THREE.MeshPhongMaterial({
-  color: 0xdc2626,
-  emissive: 0x5b0d12,
-  emissiveIntensity: 0.34,
-  specular: 0xffd6d6,
-  shininess: 165,
-});
-const ferrariDarkMaterial = new THREE.MeshPhongMaterial({
-  color: 0x111827,
-  specular: 0xd1d5db,
-  shininess: 95,
-});
-const ferrariLightMaterial = new THREE.MeshBasicMaterial({ color: 0xfff4f4 });
-
-const ferrariFrontSplitter = new THREE.Mesh(
-  new THREE.BoxGeometry(1.26, 0.08, 0.24),
-  ferrariDarkMaterial,
-);
-ferrariFrontSplitter.position.set(0, 0.23, 1.42);
-mowerFerrariKit.add(ferrariFrontSplitter);
-
-const ferrariHood = new THREE.Mesh(
-  new THREE.BoxGeometry(1.04, 0.11, 0.35),
-  ferrariPaintMaterial,
-);
-ferrariHood.position.set(0, 0.36, 1.18);
-mowerFerrariKit.add(ferrariHood);
-
-const ferrariSideSkirtL = new THREE.Mesh(
-  new THREE.BoxGeometry(0.07, 0.12, 1.18),
-  ferrariDarkMaterial,
-);
-ferrariSideSkirtL.position.set(-0.74, 0.25, 0.35);
-mowerFerrariKit.add(ferrariSideSkirtL);
-
-const ferrariSideSkirtR = new THREE.Mesh(
-  new THREE.BoxGeometry(0.07, 0.12, 1.18),
-  ferrariDarkMaterial,
-);
-ferrariSideSkirtR.position.set(0.74, 0.25, 0.35);
-mowerFerrariKit.add(ferrariSideSkirtR);
-
-const ferrariCockpit = new THREE.Mesh(
-  new THREE.BoxGeometry(0.74, 0.17, 0.5),
-  ferrariPaintMaterial,
-);
-ferrariCockpit.position.set(0, 0.84, -0.2);
-mowerFerrariKit.add(ferrariCockpit);
-
-const ferrariSpoilerBlade = new THREE.Mesh(
-  new THREE.BoxGeometry(1.18, 0.07, 0.2),
-  ferrariDarkMaterial,
-);
-ferrariSpoilerBlade.position.set(0, 0.96, -0.86);
-mowerFerrariKit.add(ferrariSpoilerBlade);
-
-const ferrariSpoilerSupportL = new THREE.Mesh(
-  new THREE.BoxGeometry(0.08, 0.22, 0.08),
-  ferrariPaintMaterial,
-);
-ferrariSpoilerSupportL.position.set(-0.45, 0.85, -0.78);
-mowerFerrariKit.add(ferrariSpoilerSupportL);
-
-const ferrariSpoilerSupportR = new THREE.Mesh(
-  new THREE.BoxGeometry(0.08, 0.22, 0.08),
-  ferrariPaintMaterial,
-);
-ferrariSpoilerSupportR.position.set(0.45, 0.85, -0.78);
-mowerFerrariKit.add(ferrariSpoilerSupportR);
-
-const ferrariLightL = new THREE.Mesh(
-  new THREE.BoxGeometry(0.13, 0.07, 0.03),
-  ferrariLightMaterial,
-);
-ferrariLightL.position.set(-0.3, 0.39, 1.48);
-mowerFerrariKit.add(ferrariLightL);
-
-const ferrariLightR = new THREE.Mesh(
-  new THREE.BoxGeometry(0.13, 0.07, 0.03),
-  ferrariLightMaterial,
-);
-ferrariLightR.position.set(0.3, 0.39, 1.48);
-mowerFerrariKit.add(ferrariLightR);
-
-mowerFerrariKit.visible = false;
-mowerDetailedModel.add(mowerFerrariKit);
 
 mowerBlueKit = new THREE.Group();
 const bluePaintMaterial = new THREE.MeshPhongMaterial({
@@ -2973,55 +2468,12 @@ mowerBlueKit.rotation.y = Math.PI;
 mowerBlueKit.visible = false;
 mowerDetailedModel.add(mowerBlueKit);
 
-mowerCannon = new THREE.Group();
-const cannonBase = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.3, 16), new THREE.MeshLambertMaterial({color: 0x111111}));
-const cannonBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.2, 16), new THREE.MeshLambertMaterial({color: 0x222222}));
-cannonBarrel.rotation.x = Math.PI / 2;
-cannonBarrel.position.set(0, 0.15, 0.4);
-mowerCannon.add(cannonBase);
-mowerCannon.add(cannonBarrel);
-mowerCannon.position.set(0, 1.1, 0);
-mowerCannon.visible = false;
-mower.add(mowerCannon);
-
 mower.add(mowerDetailedModel);
 
 mowerBlueAuraLight = new THREE.PointLight(0x4aa3ff, 1.1, 8.5, 2);
 mowerBlueAuraLight.position.set(0, 0.8, 0.2);
 mowerBlueAuraLight.visible = false;
 mower.add(mowerBlueAuraLight);
-
-mowerSkinAuraLight = new THREE.PointLight(0xffffff, 1.1, 9.5, 2);
-mowerSkinAuraLight.position.set(0, 0.62, -0.05);
-mowerSkinAuraLight.visible = false;
-mower.add(mowerSkinAuraLight);
-
-mowerSkinRingMaterial = new THREE.MeshBasicMaterial({
-  color: 0xffffff,
-  transparent: true,
-  opacity: 0.35,
-});
-mowerSkinRing = new THREE.Mesh(
-  new THREE.TorusGeometry(0.9, 0.06, 10, 34),
-  mowerSkinRingMaterial,
-);
-mowerSkinRing.rotation.x = Math.PI / 2;
-mowerSkinRing.position.set(0, 0.12, 0.1);
-mowerSkinRing.visible = false;
-mower.add(mowerSkinRing);
-
-mowerSkinTrailLine = new THREE.Line(
-  new THREE.BufferGeometry(),
-  new THREE.LineBasicMaterial({
-    color: 0x93c5fd,
-    transparent: true,
-    opacity: 0.75,
-  }),
-);
-mowerSkinTrailLine.visible = false;
-mowerSkinTrailLine.frustumCulled = false;
-mowerSkinTrailLine.renderOrder = 2;
-scene.add(mowerSkinTrailLine);
 
 mower.position.set(0, 0, 0);
 scene.add(mower, new THREE.AmbientLight(0x404040));
@@ -3056,6 +2508,111 @@ const cameraLookAhead = new THREE.Vector3();
 const desiredLookTarget = new THREE.Vector3();
 const cameraOffsetWorld = new THREE.Vector3();
 const cameraSwayWorld = new THREE.Vector3();
+
+// --- Billboards (om de X "meter" rijden) ---
+const BILLBOARD_EVERY_METERS = 8;
+const BILLBOARD_MAX = 300;
+const BILLBOARD_TELEPORT_RESET_DISTANCE = BILLBOARD_EVERY_METERS * 6;
+const BILLBOARD_Y = 2.2;
+const BILLBOARD_SCALE_X = 6.5;
+const BILLBOARD_SCALE_Y = 3.6;
+const BILLBOARD_SIDE_DISTANCE = 7.5;
+
+const billboardGroup = new THREE.Group();
+scene.add(billboardGroup);
+
+let mgwrTextureState = "idle"; // idle | loading | loaded | failed
+let mgwrTexture = null;
+const mgwrTextureLoader = new THREE.TextureLoader();
+const billboardMaterials = new Set();
+
+const ensureMgwrTexture = () => {
+  if (mgwrTextureState !== "idle") return;
+  mgwrTextureState = "loading";
+  mgwrTextureLoader.load(
+    "mgwr.jpg",
+    (tex) => {
+      mgwrTextureState = "loaded";
+      mgwrTexture = tex;
+      // Keep colors correct on modern three.js builds.
+      if ("colorSpace" in tex) tex.colorSpace = THREE.SRGBColorSpace;
+      for (const mat of billboardMaterials) {
+        mat.map = tex;
+        mat.needsUpdate = true;
+      }
+    },
+    undefined,
+    () => {
+      mgwrTextureState = "failed";
+      mgwrTexture = null;
+    },
+  );
+};
+
+const createBillboardMaterial = () => {
+  const mat = new THREE.SpriteMaterial({ color: 0xffffff });
+  billboardMaterials.add(mat);
+  if (mgwrTextureState === "loaded" && mgwrTexture) {
+    mat.map = mgwrTexture;
+    mat.needsUpdate = true;
+  } else {
+    // Probeer 1x te laden; als het faalt blijft de billboard wit.
+    ensureMgwrTexture();
+  }
+  return mat;
+};
+
+const billboardLastPos = new THREE.Vector3().copy(mower.position);
+const billboardSegStart = new THREE.Vector3();
+const billboardSegEnd = new THREE.Vector3();
+const billboardSpawnPos = new THREE.Vector3();
+const billboardTmp = new THREE.Vector3();
+let billboardDistanceToNext = BILLBOARD_EVERY_METERS;
+let billboardSideFlip = 1;
+
+const resetBillboardTravel = () => {
+  billboardLastPos.copy(mower.position);
+  billboardDistanceToNext = BILLBOARD_EVERY_METERS;
+};
+
+const spawnBillboardAt = (worldPos, yaw) => {
+  const sprite = new THREE.Sprite(createBillboardMaterial());
+
+  // Plaats hem links/rechts van de rijrichting, met kleine jitter.
+  const rightX = Math.cos(yaw);
+  const rightZ = Math.sin(yaw);
+  const forwardX = Math.sin(yaw);
+  const forwardZ = -Math.cos(yaw);
+  const side = BILLBOARD_SIDE_DISTANCE * billboardSideFlip;
+  billboardSideFlip *= -1;
+  const jitterSide = (Math.random() - 0.5) * 1.1;
+  const jitterForward = Math.random() * 1.6;
+
+  sprite.position.set(
+    worldPos.x + (side + jitterSide) * rightX + jitterForward * forwardX,
+    BILLBOARD_Y,
+    worldPos.z + (side + jitterSide) * rightZ + jitterForward * forwardZ,
+  );
+
+  if (gameMode === "classic" && !oneindigSpeelveldOnd) {
+    const maxPos = MAP_HALF_SIZE - MAP_BOUNDARY_MARGIN;
+    sprite.position.x = Math.max(-maxPos, Math.min(maxPos, sprite.position.x));
+    sprite.position.z = Math.max(-maxPos, Math.min(maxPos, sprite.position.z));
+  }
+
+  sprite.scale.set(BILLBOARD_SCALE_X, BILLBOARD_SCALE_Y, 1);
+  billboardGroup.add(sprite);
+
+  // Simpele cap om geheugen/CPU niet oneindig te laten groeien.
+  while (billboardGroup.children.length > BILLBOARD_MAX) {
+    const old = billboardGroup.children[0];
+    billboardGroup.remove(old);
+    if (old && old.material) {
+      billboardMaterials.delete(old.material);
+      old.material.dispose();
+    }
+  }
+};
 const setWorldVectorFromLocalXZ = (out, localVec, yaw) => {
   const rightX = Math.cos(yaw);
   const rightZ = Math.sin(yaw);
@@ -3102,148 +2659,6 @@ grassMesh.frustumCulled = false;
 grassMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 scene.add(grassMesh);
 
-const themeObjectsGroup = new THREE.Group();
-scene.add(themeObjectsGroup);
-const activeThemeEntities = [];
-const activeProjectiles = [];
-let cannonYaw = 0;
-let lastShotTime = 0;
-let playerHealth = 100;
-let hellKills = 0;
-let hellCooldownTot = 0;
-
-function createHellCar() {
-  const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.7, 2.2), new THREE.MeshLambertMaterial({color: 0x550000}));
-  body.position.y = 0.35;
-  const eyes = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.15, 0.1), new THREE.MeshBasicMaterial({color: 0xff0000}));
-  eyes.position.set(0, 0.5, 1.1);
-  g.add(body); g.add(eyes);
-  return g;
-}
-function createCactus() {
-  const g = new THREE.Group();
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1.8, 8), new THREE.MeshLambertMaterial({color: 0x2e8b57}));
-  m.position.y = 0.9;
-  g.add(m);
-  return g;
-}
-function createSnowman() {
-  const g = new THREE.Group();
-  const b = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshLambertMaterial({color: 0xffffff}));
-  b.position.y = 0.5;
-  const t = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshLambertMaterial({color: 0xffffff}));
-  t.position.y = 1.2;
-  g.add(b); g.add(t);
-  return g;
-}
-function createNeonPillar() {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(0.4, 2.5, 0.4), new THREE.MeshBasicMaterial({color: 0x00ffff}));
-  m.position.y = 1.25;
-  return m;
-}
-function createRock() {
-  const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.7), new THREE.MeshLambertMaterial({color: 0x444444}));
-  m.position.y = 0.5;
-  return m;
-}
-
-function spawnSingleHellcar() {
-  const car = createHellCar();
-  const angle = Math.random() * Math.PI * 2;
-  const dist = 35 + Math.random() * 30;
-  car.position.set(
-    mower.position.x + Math.sin(angle) * dist,
-    0,
-    mower.position.z + Math.cos(angle) * dist,
-  );
-  themeObjectsGroup.add(car);
-  activeThemeEntities.push({ mesh: car, type: 'hellcar', speed: 2.8 + Math.random() * 1.5 });
-}
-
-function exitHell(reasonMessage) {
-  huidigeMapId = "CLASSIC";
-  hellCooldownTot = Date.now() + 5 * 60 * 1000; // 5 minuten
-  window.applyMapTheme();
-  window.save(true);
-  alert(reasonMessage);
-}
-
-window.spawnThemeObjects = () => {
-  while(themeObjectsGroup.children.length > 0) themeObjectsGroup.remove(themeObjectsGroup.children[0]);
-  activeThemeEntities.length = 0;
-  activeProjectiles.length = 0;
-  mowerCannon.visible = false;
-
-  if (huidigeMapId === "CLASSIC") return;
-
-  if (huidigeMapId === "HELL") {
-    playerHealth = 100;
-    hellKills = 0;
-    mowerCannon.visible = true;
-    for(let i=0; i<12; i++) {
-      const car = createHellCar();
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 25 + Math.random() * 40;
-      car.position.set(Math.sin(angle)*dist, 0, Math.cos(angle)*dist);
-      themeObjectsGroup.add(car);
-      activeThemeEntities.push({ mesh: car, type: 'hellcar', speed: 2.8 + Math.random() * 1.5 });
-    }
-    return;
-  }
-
-  const count = 30;
-  for(let i=0; i<count; i++) {
-    let obj = null;
-    if (huidigeMapId === "DESERT") obj = createCactus();
-    else if (huidigeMapId === "SNOW") obj = createSnowman();
-    else if (huidigeMapId === "NEON_CITY") obj = createNeonPillar();
-    else if (huidigeMapId === "VOLCANO") obj = createRock();
-    
-    if(obj) {
-      obj.position.set((Math.random()-0.5)*130, 0, (Math.random()-0.5)*130);
-      themeObjectsGroup.add(obj);
-    }
-  }
-};
-
-window.shootCannon = () => {
-  const pGeo = new THREE.SphereGeometry(0.25, 8, 8);
-  const pMat = new THREE.MeshBasicMaterial({color: 0xffaa00});
-  const mesh = new THREE.Mesh(pGeo, pMat);
-  
-  const worldPos = new THREE.Vector3();
-  mowerCannon.getWorldPosition(worldPos);
-  worldPos.y += 0.2;
-  mesh.position.copy(worldPos);
-
-  const quat = new THREE.Quaternion();
-  mowerCannon.getWorldQuaternion(quat);
-  const v = new THREE.Vector3(0, 0, 1).applyQuaternion(quat).normalize().multiplyScalar(20);
-  
-  themeObjectsGroup.add(mesh);
-  activeProjectiles.push({ mesh: mesh, velocity: v, life: 2.5 });
-};
-
-const applyMapTheme = () => {
-  const map = getMapById(huidigeMapId);
-  const skyColor = lichtKleur === "hemelsblauw" ? 0x87ceeb : Number(map.sky ?? 0x222222);
-  scene.background = new THREE.Color(skyColor);
-  if (map.fog && Number.isFinite(map.fog.near) && Number.isFinite(map.fog.far)) {
-    scene.fog = new THREE.Fog(Number(map.fog.color ?? skyColor), map.fog.near, map.fog.far);
-  } else {
-    scene.fog = null;
-  }
-  if (ground.material?.color) {
-    ground.material.color.set(Number(map.ground ?? GROUND_COLOR));
-  }
-  if (grassMaterial.color) {
-    grassMaterial.color.set(Number(map.grass ?? 0x008000));
-  }
-  window.spawnThemeObjects();
-};
-window.applyMapTheme = applyMapTheme;
-
 const grassDummy = new THREE.Object3D();
 const grassData = new Array(totalGrass);
 const regrowQueue = [];
@@ -3260,7 +2675,6 @@ let frameAccumulatorMs = 0;
 let fpsMeterFrames = 0;
 let fpsMeterLastSampleAt = performance.now();
 let fpsMeterEl = null;
-let laatsteSnelleAutoSaveAt = 0;
 let grassIndex = 0;
 for (let x = 0; x < grassPerSide; x++) {
   for (let z = 0; z < grassPerSide; z++) {
@@ -3303,11 +2717,6 @@ const clearMovementKeys = () => {
 };
 window.onkeydown = (e) => {
   const key = e.key.toLowerCase();
-  if (!isChatInputGefocust() && key === "o") {
-    window.forceWinMiniGame();
-    keys[key] = false;
-    return;
-  }
   if (isChatInputGefocust() && CHAT_BLOKKEER_MOVE_KEYS.includes(key)) {
     keys[key] = false;
     return;
@@ -3345,11 +2754,6 @@ function cutGrassAtIndex(i, now) {
     totaalVerdiend += opbrengst;
     totaalGemaaid++;
     uiDirty = true;
-    // Extra fallback: tijdens actief spelen geregeld tussentijds opslaan.
-    if (autoSaveOnd && now - laatsteSnelleAutoSaveAt >= 1500) {
-      laatsteSnelleAutoSaveAt = now;
-      window.save(true);
-    }
   }
   return true;
 }
@@ -3450,46 +2854,6 @@ function updateFpsMeter() {
   if (fpsEl) fpsEl.innerText = `FPS: ${fps}`;
 }
 
-function updateMowerSkinFx(deltaSec, mowerIsMoving) {
-  const fx = SKIN_SPECIAL_EFFECTS[huidigeSkin];
-  if (!fx) return;
-  skinFxPulse += deltaSec * fx.pulseSpeed;
-  const pulse01 = 0.5 + Math.sin(skinFxPulse) * 0.5;
-  if (mowerSkinAuraLight && mowerSkinAuraLight.visible) {
-    mowerSkinAuraLight.intensity = fx.auraBase + pulse01 * fx.auraPulse;
-  }
-  if (mowerSkinRing && mowerSkinRing.visible) {
-    const ringScale = fx.ringScaleBase + pulse01 * fx.ringScalePulse;
-    mowerSkinRing.scale.set(ringScale, ringScale, 1);
-    mowerSkinRing.rotation.z += deltaSec * fx.ringSpin;
-    if (mowerSkinRingMaterial) {
-      mowerSkinRingMaterial.opacity = fx.ringOpacity + pulse01 * 0.08;
-    }
-  }
-  if (!mowerSkinTrailLine || !mowerSkinTrailLine.visible || !mowerIsMoving) return;
-  const step = Math.max(0.16, Number(fx.trailStep) || 0.24);
-  const pos = new THREE.Vector3(mower.position.x, 0.06, mower.position.z);
-  if (!mowerSkinTrailInitialized) {
-    mowerSkinTrailPoints.push(pos);
-    mowerSkinTrailLastPos.copy(pos);
-    mowerSkinTrailInitialized = true;
-    mowerSkinTrailLine.geometry.setFromPoints(mowerSkinTrailPoints);
-    return;
-  }
-  const dx = pos.x - mowerSkinTrailLastPos.x;
-  const dz = pos.z - mowerSkinTrailLastPos.z;
-  if (dx * dx + dz * dz < step * step) return;
-  mowerSkinTrailPoints.push(pos);
-  mowerSkinTrailLastPos.copy(pos);
-  if (mowerSkinTrailPoints.length > MOWER_SKIN_TRAIL_MAX_POINTS) {
-    mowerSkinTrailPoints.splice(
-      0,
-      mowerSkinTrailPoints.length - MOWER_SKIN_TRAIL_MAX_POINTS,
-    );
-  }
-  mowerSkinTrailLine.geometry.setFromPoints(mowerSkinTrailPoints);
-}
-
 function animate(nowPerf = performance.now()) {
   requestAnimationFrame(animate);
   const frameDeltaMs = Math.max(0, Math.min(250, nowPerf - lastFrameTime));
@@ -3504,75 +2868,6 @@ function animate(nowPerf = performance.now()) {
   frameAccumulatorMs %= FRAME_INTERVAL_MS;
 
   const deltaSec = FRAME_INTERVAL_MS / 1000;
-
-  // Theme Logic (Hellcars & Cannon)
-  if (huidigeMapId === "HELL") {
-    if (keys['l']) cannonYaw += 2.5 * deltaSec;
-    if (keys['m']) cannonYaw -= 2.5 * deltaSec;
-    if (mowerCannon) mowerCannon.rotation.y = cannonYaw;
-    if (keys['p'] && Date.now() - lastShotTime > 500) {
-      window.shootCannon();
-      lastShotTime = Date.now();
-    }
-    // Update Hellcars
-    const target = mower.position;
-    for (let i = activeThemeEntities.length - 1; i >= 0; i--) {
-      const ent = activeThemeEntities[i];
-      if (ent.type === 'hellcar') {
-        const distanceToPlayer = ent.mesh.position.distanceTo(target);
-        if (distanceToPlayer < 1.8) {
-          geld = Math.max(0, geld - 100);
-          uiDirty = true;
-          window.triggerDamageFlash();
-          playerHealth -= 20;
-
-          themeObjectsGroup.remove(ent.mesh);
-          activeThemeEntities.splice(i, 1);
-          if (playerHealth <= 0) {
-            exitHell("Je bent bezweken in de HEL! Terug naar CLASSIC. De hel is voor 5 minuten gesloten.");
-            const naam = getChatDisplayName();
-            window.sendChatMessage(`${naam} is verloren in HELL`);
-          } else {
-            spawnSingleHellcar();
-          }
-          continue; // Ga naar de volgende entiteit
-        }
-
-        const dir = new THREE.Vector3().subVectors(target, ent.mesh.position).normalize();
-        ent.mesh.position.addScaledVector(dir, ent.speed * deltaSec);
-        ent.mesh.lookAt(target);
-      }
-    }
-    // Update Projectiles
-    for (let i = activeProjectiles.length - 1; i >= 0; i--) {
-      const p = activeProjectiles[i];
-      p.mesh.position.addScaledVector(p.velocity, deltaSec);
-      p.life -= deltaSec;
-      let hit = false;
-      for (let j = activeThemeEntities.length - 1; j >= 0; j--) {
-        const ent = activeThemeEntities[j];
-        if (ent.type === 'hellcar' && p.mesh.position.distanceTo(ent.mesh.position) < 2.0) {
-          themeObjectsGroup.remove(ent.mesh);
-          activeThemeEntities.splice(j, 1);
-          hellKills++;
-          uiDirty = true;
-          if (hellKills >= 10) {
-            diamanten++;
-            exitHell("10 kills! Je hebt 1 diamant verdiend en ontsnapt uit de hel. De hel is voor 5 minuten gesloten.");
-          } else {
-            spawnSingleHellcar();
-          }
-          hit = true;
-          break;
-        }
-      }
-      if (hit || p.life <= 0) {
-        themeObjectsGroup.remove(p.mesh);
-        activeProjectiles.splice(i, 1);
-      }
-    }
-  }
-
   const frameFactor = Math.min(3, deltaSec * 60);
   let s = (gameMode === "creative" ? creativeSpeed : huidigeSnelheid) * frameFactor;
   const turnSpeed = BASE_TURN_SPEED * frameFactor;
@@ -3592,8 +2887,6 @@ function animate(nowPerf = performance.now()) {
   const rijdtVooruit = Boolean(keys["w"] || keys["z"] || keys["arrowup"]);
   const rijdtAchteruit = Boolean(keys["s"] || keys["arrowdown"]);
   const moveDir = (rijdtVooruit ? 1 : 0) + (rijdtAchteruit ? -1 : 0);
-  const prevPosX = mower.position.x;
-  const prevPosZ = mower.position.z;
   if (moveDir !== 0) {
     const yaw = stuurYaw;
     mower.position.x += Math.sin(yaw) * s * moveDir;
@@ -3604,9 +2897,38 @@ function animate(nowPerf = performance.now()) {
     mower.position.x = Math.max(-maxPos, Math.min(maxPos, mower.position.x));
     mower.position.z = Math.max(-maxPos, Math.min(maxPos, mower.position.z));
   }
-  const dxMove = mower.position.x - prevPosX;
-  const dzMove = mower.position.z - prevPosZ;
-  const mowerIsMoving = dxMove * dxMove + dzMove * dzMove > 0.0001;
+
+  // Spawn billboard om de BILLBOARD_EVERY_METERS gereden afstand.
+  billboardSegEnd.copy(mower.position);
+  const segLen = billboardTmp.copy(billboardSegEnd).sub(billboardLastPos).length();
+  if (segLen > BILLBOARD_TELEPORT_RESET_DISTANCE) {
+    // Teleport/geladen snapshot/etc: niet ineens 100 billboards spawnen.
+    resetBillboardTravel();
+  } else if (segLen > 0) {
+    // We gebruiken billboardLastPos i.p.v. billboardSegStart zodat framestops geen gaten geven.
+    billboardSegStart.copy(billboardLastPos);
+    billboardSegEnd.copy(mower.position);
+    let remaining = billboardSegStart.distanceTo(billboardSegEnd);
+    let spawnedThisFrame = 0;
+    while (remaining >= billboardDistanceToNext) {
+      const t = billboardDistanceToNext / remaining;
+      billboardSpawnPos.lerpVectors(billboardSegStart, billboardSegEnd, t);
+      spawnBillboardAt(billboardSpawnPos, stuurYaw);
+      billboardSegStart.copy(billboardSpawnPos);
+      remaining = billboardSegStart.distanceTo(billboardSegEnd);
+      billboardDistanceToNext = BILLBOARD_EVERY_METERS;
+      spawnedThisFrame++;
+      // Hard stop voor extreme situaties (teleport zonder reset, NaN, etc.).
+      if (spawnedThisFrame > 100) {
+        resetBillboardTravel();
+        break;
+      }
+    }
+    if (spawnedThisFrame <= 100) {
+      billboardDistanceToNext -= remaining;
+      billboardLastPos.copy(mower.position);
+    }
+  }
   if (mowerBlueKit && mowerBlueKit.visible && mowerBlueRotors.length) {
     for (const rotor of mowerBlueRotors) rotor.rotation.z += 0.25 * frameFactor;
   }
@@ -3614,7 +2936,6 @@ function animate(nowPerf = performance.now()) {
     blueAuraPulse += deltaSec * 4.6;
     mowerBlueAuraLight.intensity = 1.05 + Math.sin(blueAuraPulse) * 0.2;
   }
-  updateMowerSkinFx(deltaSec, mowerIsMoving);
   updateFpsMeter();
   updateGroundTiles();
   const maaierRadiusSq = huidigMowerRadius * huidigMowerRadius;
@@ -3705,16 +3026,10 @@ if (!isGeladen || !actieveOpdracht) window.genereerMissie(false);
 if (!isGeladen || !eventOpdracht) window.genereerMissie(true);
 window.initFirebase();
 
-setInterval(() => {
-  if (!autoSaveOnd) return;
-  window.save().catch((err) => {
-    console.error("Auto-save fout:", err);
-  });
-}, 5000);
-window.addEventListener("beforeunload", () => {
-  window.saveLocal();
-});
+setInterval(() => window.save(), 5000);
 window.updateUI();
 window.applySkinVisual(huidigeSkin);
-window.applyMapTheme();
+scene.background = new THREE.Color(
+  lichtKleur === "hemelsblauw" ? 0x87ceeb : 0x222222,
+);
 animate();
