@@ -60,9 +60,9 @@ let diamanten = 0,
   shopUpgradePrijs = 1;
 let trofeeen = 0,
   geclaimdeTrofeeen = 0;
-const BASE_GRASS_VALUE = 0.003;
-const VALUE_UPGRADE_STEP = 0.000162;
-const EARN_MULTIPLIER = 0.3;
+const BASE_GRASS_VALUE = 0.25;
+const VALUE_UPGRADE_STEP = 0.15;
+const EARN_MULTIPLIER = 0.5;
 const REBIRT_BONUS_STEP = 1.05;
 const REBIRT_KOST_DIAMANT = 1;
 const BASE_SPEED = 0.07;
@@ -1938,7 +1938,6 @@ window.applySaveData = (d) => {
   if (!Number.isFinite(geclaimdeTrofeeen) || geclaimdeTrofeeen < 0)
     geclaimdeTrofeeen = 0;
   geclaimdeTrofeeen = Math.min(TROFEE_DREMPELS.length, geclaimdeTrofeeen);
-  grasWaarde = Number.isFinite(d.grasWaarde) ? d.grasWaarde : BASE_GRASS_VALUE;
   huidigeSnelheid = Number.isFinite(d.huidigeSnelheid)
     ? d.huidigeSnelheid
     : BASE_SPEED;
@@ -3030,7 +3029,9 @@ if (!isGeladen || !actieveOpdracht) window.genereerMissie(false);
 if (!isGeladen || !eventOpdracht) window.genereerMissie(true);
 window.initFirebase();
 
-setInterval(() => window.save(), 5000);
+setInterval(() => {
+  if (autoSaveOnd) window.save();
+}, 15000);
 window.updateUI();
 window.applySkinVisual(huidigeSkin);
 scene.background = new THREE.Color(
