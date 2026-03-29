@@ -3021,3 +3021,4 @@ scene.background = new THREE.Color(
   lichtKleur === "hemelsblauw" ? 0x87ceeb : 0x222222,
 );
 animate();
+//test
