@@ -2559,8 +2559,17 @@ const ensureReclameTexture = () => {
     },
     undefined,
     () => {
-      reclameTextureState = "failed";
-      reclameTexture = null;
+      // Fallback: use mgwr instead of reclame if loading fails
+      reclameTextureState = "loaded";
+      reclameTexture = mgwrTexture;
+      if (mgwrTextureState === "loaded" && mgwrTexture) {
+        for (const mat of billboardMaterials) {
+          if (mat.userData.textureType === "reclame") {
+            mat.map = mgwrTexture;
+            mat.needsUpdate = true;
+          }
+        }
+      }
     },
   );
 };
@@ -2569,16 +2578,14 @@ const createBillboardMaterial = () => {
   const mat = new THREE.SpriteMaterial({ color: 0xffffff });
   billboardMaterials.add(mat);
   
-  // Randomly choose between the two textures
-  const useReclame = Math.random() > 0.5;
+  // Randomly choose between the two textures, but only if reclame is loaded
+  const useReclame = reclameTextureState === "loaded" && Math.random() > 0.5;
   mat.userData.textureType = useReclame ? "reclame" : "mgwr";
   
   if (useReclame) {
-    if (reclameTextureState === "loaded" && reclameTexture) {
+    if (reclameTexture) {
       mat.map = reclameTexture;
       mat.needsUpdate = true;
-    } else {
-      ensureReclameTexture();
     }
   } else {
     if (mgwrTextureState === "loaded" && mgwrTexture) {
@@ -2588,6 +2595,9 @@ const createBillboardMaterial = () => {
       ensureMgwrTexture();
     }
   }
+  // Always ensure both textures are loading in the background
+  ensureMgwrTexture();
+  ensureReclameTexture();
   return mat;
 };
 
