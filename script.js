@@ -2509,7 +2509,10 @@ scene.add(billboardGroup);
 
 let mgwrTextureState = "idle"; // idle | loading | loaded | failed
 let mgwrTexture = null;
+let reclameTextureState = "idle"; // idle | loading | loaded | failed
+let reclameTexture = null;
 const mgwrTextureLoader = new THREE.TextureLoader();
+const reclameTextureLoader = new THREE.TextureLoader();
 const billboardMaterials = new Set();
 
 const ensureMgwrTexture = () => {
@@ -2523,8 +2526,10 @@ const ensureMgwrTexture = () => {
       // Keep colors correct on modern three.js builds.
       if ("colorSpace" in tex) tex.colorSpace = THREE.SRGBColorSpace;
       for (const mat of billboardMaterials) {
-        mat.map = tex;
-        mat.needsUpdate = true;
+        if (mat.userData.textureType === "mgwr") {
+          mat.map = tex;
+          mat.needsUpdate = true;
+        }
       }
     },
     undefined,
@@ -2535,15 +2540,53 @@ const ensureMgwrTexture = () => {
   );
 };
 
+const ensureReclameTexture = () => {
+  if (reclameTextureState !== "idle") return;
+  reclameTextureState = "loading";
+  reclameTextureLoader.load(
+    "wil_jij_jouw_reclame_hier.png",
+    (tex) => {
+      reclameTextureState = "loaded";
+      reclameTexture = tex;
+      // Keep colors correct on modern three.js builds.
+      if ("colorSpace" in tex) tex.colorSpace = THREE.SRGBColorSpace;
+      for (const mat of billboardMaterials) {
+        if (mat.userData.textureType === "reclame") {
+          mat.map = tex;
+          mat.needsUpdate = true;
+        }
+      }
+    },
+    undefined,
+    () => {
+      reclameTextureState = "failed";
+      reclameTexture = null;
+    },
+  );
+};
+
 const createBillboardMaterial = () => {
   const mat = new THREE.SpriteMaterial({ color: 0xffffff });
   billboardMaterials.add(mat);
-  if (mgwrTextureState === "loaded" && mgwrTexture) {
-    mat.map = mgwrTexture;
-    mat.needsUpdate = true;
+  
+  // Randomly choose between the two textures
+  const useReclame = Math.random() > 0.5;
+  mat.userData.textureType = useReclame ? "reclame" : "mgwr";
+  
+  if (useReclame) {
+    if (reclameTextureState === "loaded" && reclameTexture) {
+      mat.map = reclameTexture;
+      mat.needsUpdate = true;
+    } else {
+      ensureReclameTexture();
+    }
   } else {
-    // Probeer 1x te laden; als het faalt blijft de billboard wit.
-    ensureMgwrTexture();
+    if (mgwrTextureState === "loaded" && mgwrTexture) {
+      mat.map = mgwrTexture;
+      mat.needsUpdate = true;
+    } else {
+      ensureMgwrTexture();
+    }
   }
   return mat;
 };
