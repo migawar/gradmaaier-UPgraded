@@ -170,6 +170,26 @@ const TROFEE_BELONINGEN = [
   350000000,
   2500000000,
 ];
+
+// --- POWER-UP TOKEN SYSTEM ---
+const POWERUP_TYPES = {
+  MONEY_BOOST: { name: "MONEY BOOST", duration: 10000, color: 0xffd700, multiplier: 2.5, duration_sec: 10 },
+  SPEED_BOOST: { name: "SUPER SPEED", duration: 8000, color: 0x00ff00, speedMult: 2, duration_sec: 8 },
+  RAINBOW: { name: "REGENBOOG CAR", duration: 12000, color: 0xff00ff, moneyMult: 1.5, duration_sec: 12 },
+};
+const POWERUP_SPAWN_CHANCE = 0.08; // 8% kans per second op nieuwe token
+const POWERUP_SPAWN_INTERVAL_MS = 5000; // Check elke 5 seconden voor spawnen
+const POWERUP_MAX_ON_FIELD = 8; // Max 8 tokens tegelijk
+const POWERUP_COLLISION_RADIUS = 1.2;
+const POWERUP_TOKEN_RADIUS = 0.3;
+const POWERUP_RESPAWN_TIME_MS = 20000; // Token respawnt na 20 seconden
+
+let powerups = [null];
+let lastPowerupSpawnCheck = 0;
+let activePowerups = {};
+let rainbowMode = false;
+let rainbowModeEndTime = 0;
+
 const firebaseConfig = {
   apiKey: "AIzaSyA0ukZ0I5xK3XWdeRc3cEckLq-M1Eu05RM",
   authDomain: "grasmaaier-accaunts.firebaseapp.com",
@@ -379,13 +399,16 @@ const getTrofeeProgressVerdiend = () =>
 const getVrijgespeeldeTrofeeen = () => {
   const totaal = getTrofeeProgressVerdiend();
   let unlocked = 0;
-  for (const drempel of TROFEE_DREMPELS) {
-    if (totaal >= drempel) unlocked++;
+  for (let i = 0; i < TROFEE_DREMPELS.length; i++) {
+    const drempel = TROFEE_DREMPELS[i];
+    if (Number.isFinite(drempel) && totaal >= drempel) unlocked++;
   }
-  return unlocked;
+  return Math.min(unlocked, TROFEE_DREMPELS.length);
 };
-const getTrofeeBeloning = (trofeeLevel) =>
-  TROFEE_BELONINGEN[Math.max(0, Math.min(TROFEE_BELONINGEN.length - 1, trofeeLevel - 1))];
+const getTrofeeBeloning = (trofeeLevel) => {
+  const validLevel = Math.max(0, Math.min(TROFEE_BELONINGEN.length - 1, Math.floor(trofeeLevel) - 1));
+  return Number.isFinite(TROFEE_BELONINGEN[validLevel]) ? TROFEE_BELONINGEN[validLevel] : 0;
+};
 const isOneindigSpeelveldActief = () =>
   gameMode === "creative" || oneindigSpeelveldOnd;
 const isHellServerActief = () => actieveServer === "hell";
@@ -1014,10 +1037,9 @@ window.herstelBasicSnapshot = (snapshot) => {
   eventRewardKlaar = snapshot.eventRewardKlaar;
   huidigeSkin = snapshot.huidigeSkin;
   ontgrendeldeSkins = [...snapshot.ontgrendeldeSkins];
-  shopUpgradeLevel = snapshot.shopUpgradeLevel;
+  shopUpgradeLevel = Number.isFinite(snapshot.shopUpgradeLevel) ? snapshot.shopUpgradeLevel : 0;
   shopUpgradePrijs = SHOP_UPGRADE_VASTE_KOST;
   rebirtCount = Number.isFinite(snapshot.rebirtCount) ? snapshot.rebirtCount : 0;
-  shopUpgradeLevel = 0;
   verdienMultiplier = Math.pow(REBIRT_BONUS_STEP, rebirtCount);
   radDraaiCount = snapshot.radDraaiCount;
   creativeSpeed = snapshot.creativeSpeed;
@@ -1395,10 +1417,10 @@ window.openMiniGame = () => {
 };
 
 window.getMiniGameZone = () => {
-  const index = Math.min(miniGameRonde - 1, MINIGAME_ZONE_BREEDTES.length - 1);
-  const breedte = MINIGAME_ZONE_BREEDTES[index];
-  const start = 50 - breedte / 2;
-  const einde = start + breedte;
+  const roundIndex = Math.max(0, Math.min(miniGameRonde - 1, MINIGAME_ZONE_BREEDTES.length - 1));
+  const breedte = Math.max(0, MINIGAME_ZONE_BREEDTES[roundIndex] || 24);
+  const start = Math.max(0, 50 - breedte / 2);
+  const einde = Math.min(100, start + breedte);
   return { start, einde, breedte };
 };
 
@@ -1966,7 +1988,7 @@ window.applySaveData = (d) => {
   rewardKlaar = Boolean(d.rewardKlaar);
   eventRewardKlaar = Boolean(d.eventRewardKlaar);
   diamanten = Number.isFinite(d.diamanten) ? d.diamanten : 0;
-  shopUpgradeLevel = 0;
+  shopUpgradeLevel = Number.isFinite(d.shopUpgradeLevel) ? d.shopUpgradeLevel : 0;
   shopUpgradePrijs = SHOP_UPGRADE_VASTE_KOST;
   rebirtCount = Number.isFinite(d.rebirtCount) ? d.rebirtCount : 0;
   verdienMultiplier = Math.pow(REBIRT_BONUS_STEP, rebirtCount);
@@ -2066,6 +2088,21 @@ window.initFirebase = () => {
     setChatStatus("Firebase fout", "#f87171");
   }
 };
+
+// Cleanup on page unload
+window.addEventListener("beforeunload", async () => {
+  try {
+    stopChatSubscription();
+    stopChatCleanup();
+    stopOnlinePoll();
+    window.cleanupMiniGame();
+    if (autoSaveOnd || true) {
+      await window.save(true);
+    }
+  } catch (err) {
+    console.error("Cleanup fout:", err);
+  }
+});
 
 window.toggleGoogleLogin = async () => {
   if (!firebaseAuth || !googleProvider) {
@@ -2247,6 +2284,159 @@ window.koop = (t) => {
     totaalUpgrades++;
   }
   window.updateUI();
+};
+
+// --- POWER-UP TOKEN FUNCTIONS ---
+window.spawnPowerupToken = (x, z, type) => {
+  const typeData = POWERUP_TYPES[type];
+  if (!typeData) return;
+  
+  const geometry = new THREE.IcosahedronGeometry(POWERUP_TOKEN_RADIUS, 4);
+  const material = new THREE.MeshPhongMaterial({
+    color: typeData.color,
+    emissive: typeData.color,
+    emissiveIntensity: 0.6,
+    specular: 0xffffff,
+    shininess: 100,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(x, 0.5, z);
+  scene.add(mesh);
+  
+  const token = {
+    mesh,
+    type,
+    x,
+    z,
+    collected: false,
+    spawnTime: Date.now(),
+    rotation: 0,
+  };
+  
+  powerups.push(token);
+};
+
+window.activatePowerup = (type) => {
+  const now = Date.now();
+  const typeData = POWERUP_TYPES[type];
+  if (!typeData) return;
+  
+  if (type === "MONEY_BOOST") {
+    activePowerups.moneyBoost = now + typeData.duration;
+    console.log("MONEY BOOST ACTIVATED! +150% geld verdienen");
+  } else if (type === "SPEED_BOOST") {
+    activePowerups.speedBoost = now + typeData.duration;
+    console.log("SUPER SPEED ACTIVATED! 2x snelheid");
+  } else if (type === "RAINBOW") {
+    rainbowMode = true;
+    rainbowModeEndTime = now + typeData.duration;
+    activePowerups.rainbow = rainbowModeEndTime;
+    window.applyRainbowMode(true);
+    console.log("REGENBOOG CAR ACTIVATED! Maak de wereld kleurrijk!");
+  }
+};
+
+window.applyRainbowMode = (active) => {
+  if (!mowerBodyMaterial) return;
+  if (active) {
+    mowerBodyMaterial.emissiveIntensity = 0.8;
+  } else {
+    rainbowMode = false;
+    window.applySkinVisual(huidigeSkin);
+  }
+};
+
+window.updatePowerups = (now) => {
+  // Spawn nieuwe tokens
+  if (now >= lastPowerupSpawnCheck + POWERUP_SPAWN_INTERVAL_MS) {
+    lastPowerupSpawnCheck = now;
+    if (powerups.length < POWERUP_MAX_ON_FIELD && Math.random() < POWERUP_SPAWN_CHANCE) {
+      const typeKeys = Object.keys(POWERUP_TYPES);
+      const randomType = typeKeys[Math.floor(Math.random() * typeKeys.length)];
+      
+      let x, z;
+      if (gameMode === "creative" || oneindigSpeelveldOnd) {
+        const offset = 15;
+        x = mower.position.x + (Math.random() - 0.5) * offset * 2;
+        z = mower.position.z + (Math.random() - 0.5) * offset * 2;
+      } else {
+        const maxPos = MAP_HALF_SIZE - MAP_BOUNDARY_MARGIN - 5;
+        x = (Math.random() - 0.5) * maxPos * 2;
+        z = (Math.random() - 0.5) * maxPos * 2;
+      }
+      window.spawnPowerupToken(x, z, randomType);
+    }
+  }
+  
+  // Update tokens
+  for (let i = powerups.length - 1; i >= 0; i--) {
+    const token = powerups[i];
+    const age = now - token.spawnTime;
+    
+    // Rotate token
+    token.rotation += 0.05;
+    token.mesh.rotation.x += 0.03;
+    token.mesh.rotation.y = token.rotation;
+    
+    // Bobbing effect
+    token.mesh.position.y = 0.5 + Math.sin(age / 500) * 0.2;
+    
+    // Check collision with mower
+    const dx = token.x - mower.position.x;
+    const dz = token.z - mower.position.z;
+    const distSq = dx * dx + dz * dz;
+    
+    if (!token.collected && distSq < POWERUP_COLLISION_RADIUS * POWERUP_COLLISION_RADIUS) {
+      token.collected = true;
+      window.activatePowerup(token.type);
+      scene.remove(token.mesh);
+      token.mesh.geometry.dispose();
+      token.mesh.material.dispose();
+    }
+    
+    // Remove expired tokens
+    if (age > POWERUP_RESPAWN_TIME_MS) {
+      if (!token.collected) {
+        scene.remove(token.mesh);
+        token.mesh.geometry.dispose();
+        token.mesh.material.dispose();
+      }
+      powerups.splice(i, 1);
+    }
+  }
+  
+  // Update active powerup timers
+  if (activePowerups.moneyBoost && now > activePowerups.moneyBoost) {
+    delete activePowerups.moneyBoost;
+    console.log("Money boost expired");
+  }
+  if (activePowerups.speedBoost && now > activePowerups.speedBoost) {
+    delete activePowerups.speedBoost;
+    console.log("Speed boost expired");
+  }
+  if (rainbowMode && now > rainbowModeEndTime) {
+    window.applyRainbowMode(false);
+    console.log("Rainbow mode expired");
+  }
+};
+
+window.getPowerupMultipliers = () => {
+  const now = Date.now();
+  let moneyMult = 1;
+  let speedMult = 1;
+  
+  if (activePowerups.moneyBoost && now < activePowerups.moneyBoost) {
+    moneyMult = 2.5;
+    if (activePowerups.rainbow && now < activePowerups.rainbow) {
+      moneyMult *= 1.5;
+    }
+  }
+  
+  if (activePowerups.speedBoost && now < activePowerups.speedBoost) {
+    speedMult = 2;
+  }
+  
+  return { moneyMult, speedMult };
 };
 
 // --- 7. ENGINE LOOP ---
@@ -2830,7 +3020,9 @@ function cutGrassNearMowerClassic(now, maaierRadiusSq) {
     const rowStart = x * grassPerSide;
     for (let z = minZ; z <= maxZ; z++) {
       const i = rowStart + z;
+      if (i < 0 || i >= grassData.length) continue;
       const g = grassData[i];
+      if (!g) continue;
       const dx = g.x - mower.position.x;
       const dz = g.z - mower.position.z;
       if (dx * dx + dz * dz < maaierRadiusSq && cutGrassAtIndex(i, now)) {
@@ -2845,6 +3037,7 @@ function updateCreativeGrass(now, maaierRadiusSq) {
   let matrixUpdateNodig = false;
   for (let i = 0; i < totalGrass; i++) {
     const g = grassData[i];
+    if (!g) continue;
     let wrapped = false;
     if (g.x < mower.position.x - MAP_HALF_SIZE) {
       g.x += MAP_SIZE;
